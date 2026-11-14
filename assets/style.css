@@ -20,3 +20,7 @@ tr.grp td{font:600 .9rem system-ui,sans-serif;background:var(--hl)}td.no{white-s
 .letters a{margin-right:.35rem}#pager .bar{display:flex;flex-wrap:wrap;gap:.8rem;align-items:center;font:.92rem system-ui,sans-serif;margin:.6rem 0}
 #pager .hdr{color:var(--mut);font-style:italic}.starts{font:.9rem system-ui,sans-serif}
 @media (max-width:40rem){.ab .l{padding-left:2rem;text-indent:-2rem}.ab .ln{width:1.7rem}main{padding:.8rem 16px}}
+a.ent{text-decoration:none;border-bottom:2px solid;color:inherit}a.ent:hover{background:var(--hl)}
+a.ent.persons{border-color:#b5563c}a.ent.families{border-color:#c48a2c}a.ent.places{border-color:#2f7d6d}
+a.ent.orgs{border-color:#6a5aa8}a.ent.subjects{border-color:#4a76b0}a.ent.glossary{border-color:#9a9a9a;border-bottom-style:dotted}
+.legend span{margin-right:1rem;font:.82rem system-ui,sans-serif;border-bottom:2px solid}
