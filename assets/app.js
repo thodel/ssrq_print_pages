@@ -169,7 +169,12 @@ if (bigmap && window.L) getJSON("places.json").then(pts => {
       radius: 4 + Math.sqrt(n) * 1.6, color: "#175b5b", weight: 1, fillColor: "#64c8c8", fillOpacity: conf === "möglich" ? .35 : .75})
     .bindPopup(`<b><a href="o/${id}.html">${esc(lab)}</a></b><br>${n} Stücke${span && span.length ? ` (${span[0]}–${span[1]})` : ""}<br>${esc(vols.join(", "))}`)]);
   marks.forEach(([, m]) => m.addTo(layer));
-  if (pts.length) map.fitBounds(layer.getBounds().pad(0.1));
+  // focus on the core: the middle 90 % of the points (a few register places lie far away, e.g. Ungarn)
+  if (pts.length) {
+    const q = (arr, f) => arr.slice().sort((x, y) => x - y)[Math.floor((arr.length - 1) * f)];
+    const la = pts.map(p => p[2]), lo = pts.map(p => p[3]);
+    map.fitBounds([[q(la, .05), q(lo, .05)], [q(la, .95), q(lo, .95)]], {padding: [20, 20]});
+  }
   const spans = pts.map(p => p[7]).filter(s => s && s.length);
   if (spans.length) dateSlider($("#myears"), Math.min(...spans.map(s => s[0])), Math.max(...spans.map(s => s[1])), st =>
     marks.forEach(([span, m]) => (inRange(st, span && span[0], span && span[1]) ? m.addTo(layer) : layer.removeLayer(m))));
