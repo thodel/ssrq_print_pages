@@ -10,7 +10,7 @@ a{color:var(--acc)}h1{font-size:1.6rem;line-height:1.25}h2{font:600 1.05rem syst
 table.pieces{width:100%;border-collapse:collapse;font-size:.93rem}table.pieces td,table.pieces th{padding:.3rem .4rem;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
 tr.grp td{font:600 .9rem system-ui,sans-serif;background:var(--hl)}td.no{white-space:nowrap}td.pg{white-space:nowrap}
 .canton ul,.toc,.types{padding-left:1.1rem}.canton li.todo a{color:var(--mut)}
-.ab{margin:.6rem 0;white-space:pre-wrap}.ab .l{display:block;padding-left:3rem;text-indent:-3rem}.ab .ln{display:inline-block;width:2.6rem;margin-right:.4rem;text-indent:0;text-align:right;color:var(--mut);font:.75rem system-ui,sans-serif}
+.ab{margin:.6rem 0}.ab .l{display:block;padding-left:3rem;text-indent:-3rem}.ab .ln{display:inline-block;width:2.6rem;margin-right:.4rem;text-indent:0;text-align:right;color:var(--mut);font:.75rem system-ui,sans-serif}
 .ab.regest,.ab.REGEST,.ab.description,.ab.DESCRIPTION,.ab.notes,.ab.NOTES,.ab.apparatus,.ab.APPARATUS{font-size:.9rem}
 .ab.heading,.ab.HEADING{font-weight:600}.ab.INDEX{font-size:.88rem}.marg{float:right;color:var(--mut);font:.75rem system-ui,sans-serif}
 .pb{display:block;margin:.8rem 0;padding:.15rem .5rem;background:var(--hl);font:.8rem system-ui,sans-serif;color:var(--mut)}.pb a{margin-left:.6rem}
