@@ -1,26 +1,98 @@
-:root{--bg:#fbfaf7;--fg:#1d1d1b;--mut:#6b6a66;--line:#e3e0d8;--acc:#8a1c1c;--hl:#f3efe4}
-@media (prefers-color-scheme:dark){:root{--bg:#161615;--fg:#e8e6e1;--mut:#9c9a94;--line:#33312d;--acc:#e07a6a;--hl:#24221f}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 Georgia,"Iowan Old Style",serif}
-header{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;align-items:baseline;padding:.8rem 1rem;border-bottom:1px solid var(--line);font-family:system-ui,sans-serif;font-size:.92rem}
-header .home{font-weight:600;color:var(--fg);text-decoration:none}header nav{display:flex;flex-wrap:wrap;gap:1rem}
-main{max-width:62rem;margin:0 auto;padding:1rem}footer{max-width:62rem;margin:2rem auto;padding:1rem;color:var(--mut);font:.82rem system-ui,sans-serif;border-top:1px solid var(--line)}
-a{color:var(--acc)}h1{font-size:1.6rem;line-height:1.25}h2{font:600 1.05rem system-ui,sans-serif;margin-top:2rem;border-bottom:1px solid var(--line);padding-bottom:.2rem}
-.meta,.crumbs,.pg,.vol,.ty,.var{color:var(--mut);font-family:system-ui,sans-serif;font-size:.88rem}.links a{margin-right:1rem;font-family:system-ui,sans-serif;font-size:.92rem}
-.todo{color:var(--mut)}.no{font-weight:700}
-table.pieces{width:100%;border-collapse:collapse;font-size:.93rem}table.pieces td,table.pieces th{padding:.3rem .4rem;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
-tr.grp td{font:600 .9rem system-ui,sans-serif;background:var(--hl)}td.no{white-space:nowrap}td.pg{white-space:nowrap}
-.canton ul,.toc,.types{padding-left:1.1rem}.canton li.todo a{color:var(--mut)}
-.ab{margin:.6rem 0}.ab .l{display:block;padding-left:3rem;text-indent:-3rem}.ab .ln{display:inline-block;width:2.6rem;margin-right:.4rem;text-indent:0;text-align:right;color:var(--mut);font:.75rem system-ui,sans-serif}
-.ab.regest,.ab.REGEST,.ab.description,.ab.DESCRIPTION,.ab.notes,.ab.NOTES,.ab.apparatus,.ab.APPARATUS{font-size:.9rem}
-.ab.heading,.ab.HEADING{font-weight:600}.ab.INDEX{font-size:.88rem}.marg{float:right;color:var(--mut);font:.75rem system-ui,sans-serif}
-.pb{display:block;margin:.8rem 0;padding:.15rem .5rem;background:var(--hl);font:.8rem system-ui,sans-serif;color:var(--mut)}.pb a{margin-left:.6rem}
-.reg{padding-left:1rem}.reg li{margin:.35rem 0}.refs,.auth{font:.85rem system-ui,sans-serif}.auth a,.auth{color:var(--acc)}
-.filter,select,input{font:inherit;font-size:.95rem;padding:.35rem .5rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px}
-.filter{width:100%;max-width:28rem;margin:.5rem 0}.filters{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.5rem 0}
-.letters a{margin-right:.35rem}#pager .bar{display:flex;flex-wrap:wrap;gap:.8rem;align-items:center;font:.92rem system-ui,sans-serif;margin:.6rem 0}
-#pager .hdr{color:var(--mut);font-style:italic}.starts{font:.9rem system-ui,sans-serif}
-@media (max-width:40rem){.ab .l{padding-left:2rem;text-indent:-2rem}.ab .ln{width:1.7rem}main{padding:.8rem 16px}}
-a.ent{text-decoration:none;border-bottom:2px solid;color:inherit}a.ent:hover{background:var(--hl)}
-a.ent.persons{border-color:#b5563c}a.ent.families{border-color:#c48a2c}a.ent.places{border-color:#2f7d6d}
-a.ent.orgs{border-color:#6a5aa8}a.ent.subjects{border-color:#4a76b0}a.ent.glossary{border-color:#9a9a9a;border-bottom-style:dotted}
-.legend span{margin-right:1rem;font:.82rem system-ui,sans-serif;border-bottom:2px solid}
+/* SSRQ print re-OCR — components on top of vs-base.css (Vernetzte Schweiz: infoclio palette, Barlow, light only).
+   Register types take the palette's categories: persons = pers (rosé), places = ann (turquoise),
+   families/orgs = source (gold), subjects = link blue, glossary = grey. */
+:root { --hl: #f6f1e3; }
+main.wrap { padding-top: 24px; padding-bottom: 48px; }
+.crumbs { font: .92rem var(--font-nav); color: var(--muted); margin: 0 0 6px; }
+.crumbs a { color: var(--muted); }
+.meta { font: .95rem var(--font-nav); color: var(--muted); }
+.links a, .actions a { font: .98rem var(--font-nav); margin-right: 14px; }
+.todo { color: var(--muted); }
+.no { font-weight: 600; }
+
+/* panels */
+.panel { background: var(--panel); border: 1px solid var(--border); padding: 18px 22px; margin: 18px 0; }
+.panel > h2:first-child { margin-top: 0; }
+.doc-head { border-left: 6px solid var(--accent); }
+
+/* tables */
+table.pieces { width: 100%; border-collapse: collapse; background: var(--panel); font-size: 15px; }
+table.pieces th { font: 600 13px var(--font-nav); color: var(--muted); text-align: left; padding: 6px 8px; border-bottom: 2px solid var(--border); }
+table.pieces td { padding: 6px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+tr.grp td { font: 600 .95rem var(--font-nav); background: var(--cat-source-pale); }
+td.no, td.pg { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.toc { padding-left: 1.1rem; } .toc li { margin: 3px 0; }
+
+/* volumes by canton */
+.cantons { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.cantons .card h3 { font-size: 1.35rem; }
+.cantons ul { list-style: none; padding: 0; margin: 0; font-size: 15px; }
+.cantons li { padding: 4px 0; border-top: 1px solid var(--border); }
+.cantons li.todo a { color: var(--muted); }
+.vol { font: .85rem var(--font-nav); color: var(--muted); }
+
+/* transcription */
+.ab { margin: .5rem 0; font-family: Georgia, "Iowan Old Style", serif; font-size: 16.5px; line-height: 1.6; }
+.ab .l { display: block; padding-left: 3rem; text-indent: -3rem; }
+.ab .ln { display: inline-block; width: 2.6rem; margin-right: .4rem; text-indent: 0; text-align: right; color: var(--nav-grey);
+  font: .75rem var(--font-nav); font-variant-numeric: tabular-nums; }
+.ab.regest, .ab.REGEST, .ab.description, .ab.DESCRIPTION, .ab.notes, .ab.NOTES, .ab.apparatus, .ab.APPARATUS { font-size: 15px; }
+.ab.heading, .ab.HEADING { font-weight: 600; }
+.ab.INDEX { font-size: 15px; }
+.marg { float: right; color: var(--muted); font: .75rem var(--font-nav); }
+.pb { display: block; margin: 14px 0 8px; padding: 3px 10px; background: var(--bg); border-left: 4px solid var(--nav-grey);
+  font: .85rem var(--font-nav); color: var(--muted); }
+.pb a { margin-left: .7rem; }
+section.edition, section.heading, section.regest, section.description, section.apparatus, section.notes,
+section.commentary, section.register { background: var(--panel); border: 1px solid var(--border); padding: 6px 22px 14px; margin: 14px 0; }
+section.edition { border-left: 6px solid var(--cat-source); }
+
+/* register terms in the text */
+a.ent { color: inherit; text-decoration: none; border-bottom: 2px solid; }
+a.ent:hover { background: var(--hl); }
+a.ent.persons { border-color: var(--cat-pers); } a.ent.places { border-color: var(--cat-ann); }
+a.ent.families { border-color: var(--cat-source); } a.ent.orgs { border-color: #a58fd0; }
+a.ent.subjects { border-color: #8fb3d9; } a.ent.glossary { border-color: #b8b8b8; border-bottom-style: dotted; }
+.legend { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font: .9rem var(--font-nav); color: var(--muted); }
+.legend .sw { display: inline-block; width: 22px; height: 0; border-bottom: 3px solid; margin-right: 6px; vertical-align: middle; }
+
+/* register lists */
+.reg { list-style: none; padding: 0; }
+.reg li { background: var(--panel); border: 1px solid var(--border); border-left: 6px solid var(--border); padding: 10px 14px; margin: 8px 0; }
+.reg li.persons { border-left-color: var(--cat-pers); } .reg li.places { border-left-color: var(--cat-ann); }
+.reg li.families, .reg li.orgs { border-left-color: var(--cat-source); } .reg li.subjects { border-left-color: #8fb3d9; }
+.reg li.glossary { border-left-color: #b8b8b8; }
+.reg .var, .ty { color: var(--muted); font: .9rem var(--font-nav); }
+.refs, .auth { font: .92rem var(--font-nav); margin-top: 4px; }
+.auth a { color: var(--cat-pers-dk); }
+.letters { font: 1rem var(--font-nav); } .letters a { display: inline-block; padding: 2px 6px; }
+.types { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.types a { display: inline-block; background: var(--panel); border: 1px solid var(--border); padding: 6px 12px; font-family: var(--font-nav); }
+
+/* search */
+.filter { width: 100%; max-width: 32rem; font: 1rem var(--font-ui); padding: 8px 10px; border: 1px solid var(--border); }
+.facets { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 10px 0 16px; font: .95rem var(--font-nav); }
+.facets fieldset { border: 1px solid var(--border); background: var(--panel); padding: 6px 10px; margin: 0; }
+.facets legend { font-weight: 600; padding: 0 4px; }
+.facets label { margin-right: 10px; white-space: nowrap; }
+.facets select, .facets input[type=number] { font: .95rem var(--font-nav); padding: 3px 4px; }
+.hitcount { font: .95rem var(--font-nav); color: var(--muted); margin: 6px 0; }
+mark { background: var(--cat-source-pale); padding: 0 1px; }
+
+/* map, place cards, sankey */
+.map { height: 560px; border: 1px solid var(--border); background: var(--panel); }
+.placecard { border-left-color: var(--cat-ann); }
+.placecard dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 15px; margin: 8px 0; }
+.placecard dt { font-family: var(--font-nav); color: var(--muted); }
+.minimap { height: 220px; border: 1px solid var(--border); margin-top: 10px; }
+#sankey svg { width: 100%; height: auto; background: var(--panel); border: 1px solid var(--border); }
+#sankey .node text { font: 13px var(--font-nav); fill: var(--ink); }
+#sankey .link { fill: none; stroke-opacity: .35; } #sankey .link:hover { stroke-opacity: .7; cursor: pointer; }
+
+/* page browser */
+#pager .bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font: 1rem var(--font-nav); margin: 10px 0;
+  background: var(--panel); border: 1px solid var(--border); padding: 8px 12px; }
+#pager .hdr { color: var(--muted); font-style: italic; }
+.starts { font: .95rem var(--font-nav); }
+.pagebox { background: var(--panel); border: 1px solid var(--border); padding: 10px 22px; }
+@media (max-width: 640px) { .ab .l { padding-left: 2rem; text-indent: -2rem; } .ab .ln { width: 1.7rem; } .map { height: 420px; } }

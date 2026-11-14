@@ -51,13 +51,122 @@ if (dtab) fetch("documents.json").then(r => r.json()).then(rows => {
   ["#dq", "#dc", "#dy1", "#dy2"].forEach(s => $(s).addEventListener("input", draw)); draw();
 });
 
-// super-register search
-const rs = $("#rsearch");
-if (rs) { let idx = null; const names = {persons: "Personen", families: "Familien", places: "Orte", orgs: "Organisationen", subjects: "Sachen", glossary: "Glossar"};
-  rs.addEventListener("input", async () => {
-    idx = idx || await fetch("index.json").then(r => r.json());
-    const q = fold(rs.value); if (q.length < 2) { $("#rhits").innerHTML = ""; return; }
-    const hit = idx.filter(x => fold(x[0]).includes(q)).slice(0, 200);
-    $("#rhits").innerHTML = hit.map(x => `<li><a href="${x[1]}/${x[2]}.html#${x[3]}">${esc(x[0])}</a> <span class="ty">${names[x[1]]}, ${x[4]} Bd.</span></li>`).join("");
+
+// ---------------------------------------------------------------- shared
+const UP = document.body.dataset.up || "";
+// same normalisation as ssrq_print.superindex.norm
+const norm = s => String(s || "").replace(/ſ/g, "s").replace(/ß/g, "ss").normalize("NFKD").toLowerCase()
+  .replace(/[̀-ͯ]/g, "").replace(/v/g, "u").replace(/j/g, "i").replace(/y/g, "i").replace(/w/g, "u")
+  .replace(/(ae|oe|ue)/g, m => m[0]).replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+const TYPE = {persons: "Personen", families: "Familien", places: "Orte", orgs: "Organisationen", subjects: "Sachen", glossary: "Glossar"};
+const getJSON = (() => { const c = {}; return u => c[u] || (c[u] = fetch(u).then(r => r.ok ? r.json() : null)); })();
+
+// ---------------------------------------------------------------- faceted search (s/suche.html)
+const sform = $("#sform");
+if (sform) (async () => {
+  const base = "search/", meta = await getJSON(base + "meta.json");
+  const params = new URLSearchParams(location.search + "&" + location.hash.slice(1));
+  $("#sq").value = params.get("q") || "";
+  const st = {typ: params.get("typ") || "", kanton: params.get("kanton") || "", band: params.get("band") || "",
+              jh: params.get("jh") || "", norm: params.get("normdaten") || "", karte: params.get("karte") === "1", neu: false};
+  const opt = (v, t, sel) => `<option value="${esc(v)}"${v === sel ? " selected" : ""}>${esc(t)}</option>`;
+  $("#facets").innerHTML = `
+    <fieldset><legend>Typ</legend><select id="f-typ">${opt("", "alle")}${Object.entries(TYPE).map(([k, v]) => opt(k, v, st.typ)).join("")}</select></fieldset>
+    <fieldset><legend>Kanton</legend><select id="f-kanton">${opt("", "alle")}${Object.entries(meta.cantons).map(([k, v]) => opt(k, v, st.kanton)).join("")}</select></fieldset>
+    <fieldset><legend>Band</legend><select id="f-band">${opt("", "alle")}${meta.volumes.map(v => opt(v, v, st.band)).join("")}</select></fieldset>
+    <fieldset><legend>Jahrhundert</legend><select id="f-jh">${opt("", "alle")}${[11,12,13,14,15,16,17,18,19].map(c => opt(String(c), c + ". Jh.", st.jh)).join("")}</select></fieldset>
+    <fieldset><legend>Normdaten</legend><select id="f-norm">${opt("", "alle")}${[["hls", "HLS verknüpft"], ["ssrq", "SSRQ verknüpft"], ["kf", "Königsfelden verknüpft"], ["amb", "mehrdeutig"], ["none", "ohne Normdaten"]].map(([k, v]) => opt(k, v, st.norm)).join("")}</select></fieldset>
+    <fieldset><legend>Weitere</legend><label><input type="checkbox" id="f-karte"${st.karte ? " checked" : ""}> auf der Karte</label>
+      <label><input type="checkbox" id="f-neu"> in neuen Bänden</label></fieldset>`;
+  const chunks = {};
+  const rec = async i => { const k = Math.floor(i / meta.chunk); chunks[k] = chunks[k] || await getJSON(`${base}rec-${k}.json`); return chunks[k][i % meta.chunk]; };
+  const ids = async w => {
+    const ix = await getJSON(`${base}ix-${w.slice(0, 2).replace(/[^A-Za-z0-9._-]+/g, "_")}.json`) || {}, out = new Set();
+    for (const [word, list] of Object.entries(ix)) if (word.startsWith(w)) list.forEach(i => out.add(i));
+    return out;
+  };
+  const passes = r => {
+    const f = id => $(id).value;
+    if (f("#f-typ") && r.t !== f("#f-typ")) return false;
+    if (f("#f-kanton") && !r.k.includes(f("#f-kanton"))) return false;
+    if (f("#f-band") && !r.b.includes(f("#f-band"))) return false;
+    if (f("#f-jh") && !r.c.includes(+f("#f-jh"))) return false;
+    const n = f("#f-norm"), a = r.a || {};
+    if (n === "amb" && !Object.values(a).includes("ambiguous")) return false;
+    if (n === "none" && Object.values(a).some(x => x === "match" || x === "ambiguous")) return false;
+    if (["hls", "ssrq", "kf"].includes(n) && a[n] !== "match") return false;
+    if ($("#f-karte").checked && !r.m) return false;
+    if ($("#f-neu").checked && !r.e) return false;
+    return true;
+  };
+  const run = async () => {
+    const words = norm($("#sq").value).split(" ").filter(w => w.length >= 2);
+    let cand = null;
+    for (const w of words) { const s = await ids(w); cand = cand ? new Set([...cand].filter(i => s.has(i))) : s; }
+    if (!cand) cand = new Set([...Array(meta.n).keys()]);
+    const all = [];
+    for (const i of cand) { const r = await rec(i); if (r && passes(r)) all.push(r); }
+    all.sort((a, b) => b.n - a.n || a.l.localeCompare(b.l));
+    const byType = {}; all.forEach(r => byType[r.t] = (byType[r.t] || 0) + 1);
+    $("#scount").textContent = `${all.length} Einträge` + (all.length ? " — " + Object.entries(byType).map(([t, n]) => `${TYPE[t]} ${n}`).join(", ") : "") + (all.length > 300 ? " (die ersten 300 angezeigt)" : "");
+    const hl = s => { let h = esc(s); words.forEach(w => { h = h.replace(new RegExp(`(^|[^\\p{L}])(${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "giu"), "$1<mark>$2</mark>"); }); return h; };
+    $("#shits").innerHTML = all.slice(0, 300).map(r => `<li class="${r.t}"><a href="../r/${r.t}/${r.L}.html#${r.i}"><b>${hl(r.l)}</b></a>
+      ${r.v.length ? `<span class="var">(${hl(r.v.join(", "))})</span>` : ""} ${r.d ? "— " + hl(r.d) : ""}
+      <div class="refs">${TYPE[r.t]} · ${r.n} Stücke · ${esc(r.b.join(", "))}${r.m ? ` · <a href="../k/o/${r.i}.html">Ortskarte</a>` : ""}${r.e ? ` · ${r.e} in neuen Bänden` : ""}
+      ${Object.entries(r.a || {}).filter(([, v]) => v === "match").map(([k]) => `<span class="ty">${k.toUpperCase()} ✓</span>`).join(" ")}</div></li>`).join("");
+  };
+  sform.addEventListener("submit", ev => { ev.preventDefault(); history.replaceState(null, "", "?q=" + encodeURIComponent($("#sq").value)); run(); });
+  $("#facets").addEventListener("change", run);
+  if ($("#sq").value || location.hash) run();
+})();
+
+// ---------------------------------------------------------------- map (k/karte.html) and place cards
+const bigmap = $("#bigmap");
+if (bigmap && window.L) getJSON("places.json").then(pts => {
+  const map = L.map(bigmap).setView([46.8, 8.2], 8);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 17, attribution: "© OpenStreetMap"}).addTo(map);
+  const layer = L.featureGroup().addTo(map);
+  pts.forEach(([id, lab, lat, lon, n, vols, conf]) => {
+    L.circleMarker([lat, lon], {radius: 4 + Math.sqrt(n) * 1.6, color: "#175b5b", weight: 1, fillColor: "#64c8c8",
+      fillOpacity: conf === "möglich" ? .35 : .75})
+      .bindPopup(`<b><a href="o/${id}.html">${esc(lab)}</a></b><br>${n} Stücke<br>${esc(vols.join(", "))}`).addTo(layer);
   });
+  if (pts.length) map.fitBounds(layer.getBounds().pad(0.1));
+});
+const minimap = $("#minimap");
+if (minimap && window.L) {
+  const ll = [+minimap.dataset.lat, +minimap.dataset.lon], m = L.map(minimap, {scrollWheelZoom: false}).setView(ll, 11);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 17, attribution: "© OpenStreetMap"}).addTo(m);
+  L.circleMarker(ll, {radius: 8, color: "#175b5b", fillColor: "#64c8c8", fillOpacity: .8}).addTo(m);
 }
+
+// ---------------------------------------------------------------- sankey (r/sankey.html)
+const sk = $("#sankey");
+if (sk && window.d3 && d3.sankey) getJSON("sankey.json").then(flows => {
+  const names = [...new Set(flows.flatMap(f => [f[0], f[1]]))];
+  const W = Math.max(760, sk.clientWidth), H = Math.max(420, names.length * 22);
+  const graph = d3.sankey().nodeId(d => d.name).nodeWidth(14).nodePadding(10).extent([[1, 1], [W - 160, H - 6]])({
+    nodes: names.map(name => ({name})), links: flows.map(([s, t, v]) => ({source: s, target: t, value: v}))});
+  const svg = d3.select(sk).append("svg").attr("viewBox", `0 0 ${W} ${H}`);
+  const col = n => ({Personen: "#dc878c", Orte: "#64c8c8", Familien: "#d7b95a", Organisationen: "#a58fd0", Sachen: "#8fb3d9", Glossar: "#b8b8b8",
+    "HLS verknüpft": "#d21938", "SSRQ/Königsfelden verknüpft": "#a81429", "mehrdeutig": "#d7b95a", "ohne Normdaten": "#c7c7c3"}[n] || "#7a4e14");
+  const canton = Object.fromEntries(Object.entries({AG: "Aargau", AR: "Appenzell", BE: "Bern", FR: "Freiburg / Fribourg", GE: "Genève", GL: "Glarus",
+    GR: "Graubünden", LU: "Luzern", NE: "Neuchâtel", SG: "St. Gallen", SH: "Schaffhausen", SO: "Solothurn", TG: "Thurgau", TI: "Ticino",
+    VD: "Vaud", VS: "Wallis / Valais", ZG: "Zug", ZH: "Zürich"}).map(([k, v]) => [v, k]));
+  const typ = Object.fromEntries(Object.entries(TYPE).map(([k, v]) => [v, k]));
+  const nrm = {"HLS verknüpft": "hls", "SSRQ/Königsfelden verknüpft": "ssrq", "mehrdeutig": "amb", "ohne Normdaten": "none"};
+  svg.append("g").selectAll("path").data(graph.links).join("path").attr("class", "link").attr("d", d3.sankeyLinkHorizontal())
+    .attr("stroke", d => col(d.target.name)).attr("stroke-width", d => Math.max(1, d.width))
+    .on("click", (ev, d) => {
+      const p = new URLSearchParams();
+      if (canton[d.source.name]) p.set("kanton", canton[d.source.name]);
+      if (typ[d.source.name]) p.set("typ", typ[d.source.name]);
+      if (typ[d.target.name]) p.set("typ", typ[d.target.name]);
+      if (nrm[d.target.name]) p.set("normdaten", nrm[d.target.name]);
+      location.href = `../s/suche.html#${p}`;
+    }).append("title").text(d => `${d.source.name} → ${d.target.name}: ${d.value}`);
+  const node = svg.append("g").selectAll("g").data(graph.nodes).join("g").attr("class", "node");
+  node.append("rect").attr("x", d => d.x0).attr("y", d => d.y0).attr("height", d => Math.max(1, d.y1 - d.y0))
+    .attr("width", d => d.x1 - d.x0).attr("fill", d => col(d.name)).append("title").text(d => `${d.name}: ${d.value}`);
+  node.append("text").attr("x", d => d.x1 + 6).attr("y", d => (d.y0 + d.y1) / 2).attr("dy", "0.35em").text(d => `${d.name} (${d.value})`);
+});
