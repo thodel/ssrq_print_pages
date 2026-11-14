@@ -96,3 +96,6 @@ mark { background: var(--cat-source-pale); padding: 0 1px; }
 .starts { font: .95rem var(--font-nav); }
 .pagebox { background: var(--panel); border: 1px solid var(--border); padding: 10px 22px; }
 @media (max-width: 640px) { .ab .l { padding-left: 2rem; text-indent: -2rem; } .ab .ln { width: 1.7rem; } .map { height: 420px; } }
+.facets fieldset.wide { flex: 1 1 360px; }
+.rs-reset { font: .85rem var(--font-nav); border: 1px solid var(--border); background: var(--panel); padding: 3px 8px; cursor: pointer; }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 10px 0; }

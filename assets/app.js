@@ -4,6 +4,40 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&
 const slug = s => String(s).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "x";
 const fold = s => String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/ſ/g, "s").toLowerCase();
 
+// date slider (two thumbs; markup and CSS from Vernetzte Schweiz: .ctl.wide > .yr-label + .rs + .yr-label)
+function dateSlider(host, min, max, onChange, label = "Zeitraum") {
+  if (!host || !(max > min)) return null;
+  host.innerHTML = `<span>${label}</span><b class="yr-label">${min}</b><div class="rs"><div class="rs-track"></div><div class="rs-fill"></div>
+    <input type="range" min="${min}" max="${max}" value="${min}" aria-label="von"><input type="range" min="${min}" max="${max}" value="${max}" aria-label="bis"></div>
+    <b class="yr-label">${max}</b><button type="button" class="rs-reset" hidden>alle Jahre</button>`;
+  const [a, b] = host.querySelectorAll("input"), [l1, l2] = host.querySelectorAll(".yr-label"), fill = host.querySelector(".rs-fill"),
+        reset = host.querySelector(".rs-reset");
+  const state = {lo: min, hi: max, active: false};
+  const draw = () => {
+    let lo = +a.value, hi = +b.value; if (lo > hi) [lo, hi] = [hi, lo];
+    Object.assign(state, {lo, hi, active: lo > min || hi < max});
+    l1.textContent = lo; l2.textContent = hi; reset.hidden = !state.active;
+    fill.style.left = `${(lo - min) / (max - min) * 100}%`; fill.style.width = `${(hi - lo) / (max - min) * 100}%`;
+  };
+  a.addEventListener("input", () => { draw(); onChange(state); }); b.addEventListener("input", () => { draw(); onChange(state); });
+  reset.addEventListener("click", () => { a.value = min; b.value = max; draw(); onChange(state); });
+  draw();
+  return state;
+}
+// a year (or [from, to]) passes the slider if the ranges overlap; undated items pass only without a filter
+const inRange = (st, y0, y1 = y0) => !st || !st.active || (y0 != null && y1 >= st.lo && y0 <= st.hi);
+
+// per-volume Stückverzeichnis: rows carry data-year
+document.querySelectorAll("[data-yslider]").forEach(host => {
+  const tab = document.getElementById(host.dataset.yslider), rows = [...tab.tBodies[0].rows];
+  const ys = rows.map(r => parseInt(r.dataset.year)).filter(Boolean);
+  if (ys.length < 2) return;
+  dateSlider(host, Math.min(...ys), Math.max(...ys), st => rows.forEach(r => {
+    const y = parseInt(r.dataset.year);
+    r.style.display = r.classList.contains("grp") || inRange(st, isNaN(y) ? null : y) ? "" : "none";
+  }));
+});
+
 document.querySelectorAll("input.filter[data-target]").forEach(inp => {
   const tgt = document.getElementById(inp.dataset.target);
   inp.addEventListener("input", () => {
@@ -40,15 +74,18 @@ if (pager) fetch("pages.json").then(r => r.json()).then(data => {
 // super-Stückverzeichnis
 const dtab = $("#dtab");
 if (dtab) fetch("documents.json").then(r => r.json()).then(rows => {
+  const ys = rows.map(r => r[4]).filter(Boolean);
+  let yst = null;
   const draw = () => {
-    const q = fold($("#dq").value), c = $("#dc").value, y1 = parseInt($("#dy1").value) || 0, y2 = parseInt($("#dy2").value) || 9999;
-    const hit = rows.filter(r => (!c || r[2] === c) && (!q || fold(r[6]).includes(q)) && (!(y1 || y2 < 9999) || (r[4] && r[4] >= y1 && r[4] <= y2)));
+    const q = fold($("#dq").value), c = $("#dc").value;
+    const hit = rows.filter(r => (!c || r[2] === c) && (!q || fold(r[6]).includes(q)) && inRange(yst, r[4]));
     $("#dn").textContent = `${hit.length} Stücke${hit.length > 1000 ? " (erste 1000 angezeigt)" : ""}`;
     dtab.tBodies[0].innerHTML = hit.slice(0, 1000).map(r =>
       `<tr><td><a href="../v/${esc(r[1])}/index.html">${esc(r[1])}</a></td><td class="no">${esc(r[3])}</td><td>${esc(r[5])}</td>
        <td><a href="../v/${esc(r[1])}/d/${slug(r[0].split("-").slice(1).join("-"))}.html">${esc(r[6])}</a></td></tr>`).join("");
   };
-  ["#dq", "#dc", "#dy1", "#dy2"].forEach(s => $(s).addEventListener("input", draw)); draw();
+  yst = dateSlider($("#dyears"), Math.min(...ys), Math.max(...ys), draw);
+  ["#dq", "#dc"].forEach(s => $(s).addEventListener("input", draw)); draw();
 });
 
 
@@ -74,7 +111,7 @@ if (sform) (async () => {
     <fieldset><legend>Typ</legend><select id="f-typ">${opt("", "alle")}${Object.entries(TYPE).map(([k, v]) => opt(k, v, st.typ)).join("")}</select></fieldset>
     <fieldset><legend>Kanton</legend><select id="f-kanton">${opt("", "alle")}${Object.entries(meta.cantons).map(([k, v]) => opt(k, v, st.kanton)).join("")}</select></fieldset>
     <fieldset><legend>Band</legend><select id="f-band">${opt("", "alle")}${meta.volumes.map(v => opt(v, v, st.band)).join("")}</select></fieldset>
-    <fieldset><legend>Jahrhundert</legend><select id="f-jh">${opt("", "alle")}${[11,12,13,14,15,16,17,18,19].map(c => opt(String(c), c + ". Jh.", st.jh)).join("")}</select></fieldset>
+    <fieldset class="wide"><legend>Zeitraum der Stücke</legend><div class="ctl wide" id="f-years"></div></fieldset>
     <fieldset><legend>Normdaten</legend><select id="f-norm">${opt("", "alle")}${[["hls", "HLS verknüpft"], ["ssrq", "SSRQ verknüpft"], ["kf", "Königsfelden verknüpft"], ["amb", "mehrdeutig"], ["none", "ohne Normdaten"]].map(([k, v]) => opt(k, v, st.norm)).join("")}</select></fieldset>
     <fieldset><legend>Weitere</legend><label><input type="checkbox" id="f-karte"${st.karte ? " checked" : ""}> auf der Karte</label>
       <label><input type="checkbox" id="f-neu"> in neuen Bänden</label></fieldset>`;
@@ -90,7 +127,7 @@ if (sform) (async () => {
     if (f("#f-typ") && r.t !== f("#f-typ")) return false;
     if (f("#f-kanton") && !r.k.includes(f("#f-kanton"))) return false;
     if (f("#f-band") && !r.b.includes(f("#f-band"))) return false;
-    if (f("#f-jh") && !r.c.includes(+f("#f-jh"))) return false;
+    if (yst && yst.active && !(r.y && r.y.length && inRange(yst, r.y[0], r.y[1]))) return false;
     const n = f("#f-norm"), a = r.a || {};
     if (n === "amb" && !Object.values(a).includes("ambiguous")) return false;
     if (n === "none" && Object.values(a).some(x => x === "match" || x === "ambiguous")) return false;
@@ -115,6 +152,8 @@ if (sform) (async () => {
       <div class="refs">${TYPE[r.t]} · ${r.n} Stücke · ${esc(r.b.join(", "))}${r.m ? ` · <a href="../k/o/${r.i}.html">Ortskarte</a>` : ""}${r.e ? ` · ${r.e} in neuen Bänden` : ""}
       ${Object.entries(r.a || {}).filter(([, v]) => v === "match").map(([k]) => `<span class="ty">${k.toUpperCase()} ✓</span>`).join(" ")}</div></li>`).join("");
   };
+  let yst = null, tmo = null;
+  yst = dateSlider($("#f-years"), meta.years[0], meta.years[1], () => { clearTimeout(tmo); tmo = setTimeout(run, 250); }, "");
   sform.addEventListener("submit", ev => { ev.preventDefault(); history.replaceState(null, "", "?q=" + encodeURIComponent($("#sq").value)); run(); });
   $("#facets").addEventListener("change", run);
   if ($("#sq").value || location.hash) run();
@@ -126,12 +165,14 @@ if (bigmap && window.L) getJSON("places.json").then(pts => {
   const map = L.map(bigmap).setView([46.8, 8.2], 8);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 17, attribution: "© OpenStreetMap"}).addTo(map);
   const layer = L.featureGroup().addTo(map);
-  pts.forEach(([id, lab, lat, lon, n, vols, conf]) => {
-    L.circleMarker([lat, lon], {radius: 4 + Math.sqrt(n) * 1.6, color: "#175b5b", weight: 1, fillColor: "#64c8c8",
-      fillOpacity: conf === "möglich" ? .35 : .75})
-      .bindPopup(`<b><a href="o/${id}.html">${esc(lab)}</a></b><br>${n} Stücke<br>${esc(vols.join(", "))}`).addTo(layer);
-  });
+  const marks = pts.map(([id, lab, lat, lon, n, vols, conf, span]) => [span, L.circleMarker([lat, lon], {
+      radius: 4 + Math.sqrt(n) * 1.6, color: "#175b5b", weight: 1, fillColor: "#64c8c8", fillOpacity: conf === "möglich" ? .35 : .75})
+    .bindPopup(`<b><a href="o/${id}.html">${esc(lab)}</a></b><br>${n} Stücke${span && span.length ? ` (${span[0]}–${span[1]})` : ""}<br>${esc(vols.join(", "))}`)]);
+  marks.forEach(([, m]) => m.addTo(layer));
   if (pts.length) map.fitBounds(layer.getBounds().pad(0.1));
+  const spans = pts.map(p => p[7]).filter(s => s && s.length);
+  if (spans.length) dateSlider($("#myears"), Math.min(...spans.map(s => s[0])), Math.max(...spans.map(s => s[1])), st =>
+    marks.forEach(([span, m]) => (inRange(st, span && span[0], span && span[1]) ? m.addTo(layer) : layer.removeLayer(m))));
 });
 const minimap = $("#minimap");
 if (minimap && window.L) {
@@ -145,7 +186,7 @@ const sk = $("#sankey");
 if (sk && window.d3 && d3.sankey) getJSON("sankey.json").then(flows => {
   const names = [...new Set(flows.flatMap(f => [f[0], f[1]]))];
   const W = Math.max(760, sk.clientWidth), H = Math.max(420, names.length * 22);
-  const graph = d3.sankey().nodeId(d => d.name).nodeWidth(14).nodePadding(10).extent([[1, 1], [W - 160, H - 6]])({
+  const graph = d3.sankey().nodeId(d => d.name).nodeWidth(14).nodePadding(10).extent([[1, 26], [W - 230, H - 6]])({
     nodes: names.map(name => ({name})), links: flows.map(([s, t, v]) => ({source: s, target: t, value: v}))});
   const svg = d3.select(sk).append("svg").attr("viewBox", `0 0 ${W} ${H}`);
   const col = n => ({Personen: "#dc878c", Orte: "#64c8c8", Familien: "#d7b95a", Organisationen: "#a58fd0", Sachen: "#8fb3d9", Glossar: "#b8b8b8",
@@ -165,6 +206,8 @@ if (sk && window.d3 && d3.sankey) getJSON("sankey.json").then(flows => {
       if (nrm[d.target.name]) p.set("normdaten", nrm[d.target.name]);
       location.href = `../s/suche.html#${p}`;
     }).append("title").text(d => `${d.source.name} → ${d.target.name}: ${d.value}`);
+  [["Kanton des Bandes", 1], ["Typ des Registereintrags", (W - 230) / 2], ["Normdaten", W - 244]].forEach(([t, x]) =>
+    svg.append("text").attr("x", x).attr("y", 14).attr("class", "colhead").text(t).style("font", "600 13px var(--font-nav)"));
   const node = svg.append("g").selectAll("g").data(graph.nodes).join("g").attr("class", "node");
   node.append("rect").attr("x", d => d.x0).attr("y", d => d.y0).attr("height", d => Math.max(1, d.y1 - d.y0))
     .attr("width", d => d.x1 - d.x0).attr("fill", d => col(d.name)).append("title").text(d => `${d.name}: ${d.value}`);
