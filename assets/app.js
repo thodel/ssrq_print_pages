@@ -247,9 +247,11 @@ if (entryBox) {
     docs.sort((a, b) => (a.y || 9999) - (b.y || 9999));
     const co = {};
     docs.forEach(d => d.cites.forEach(c => { if (c !== cid) co[c] = (co[c] || 0) + 1; }));
-    const top = Object.entries(co).sort((a, b) => b[1] - a[1]);
+    const ranked = Object.entries(co).sort((a, b) => b[1] - a[1]).slice(0, 80);
     const lab = {};
-    await Promise.all(top.slice(0, 40).map(async ([c]) => { lab[c] = await entryOf(c); }));
+    await Promise.all(ranked.map(async ([c]) => { lab[c] = await entryOf(c); }));
+    // abbreviations the register parser kept as entries ("b.", "t.") are no companions
+    const top = ranked.filter(([c]) => lab[c] && norm(lab[c].l).replace(/ /g, "").length >= 3);
     $("#echips").innerHTML = top.slice(0, 40).map(([c, n]) => lab[c] ? `<a href="#${c}" title="${TYPE[lab[c].t]}">${esc(lab[c].l)}<b>${n}</b></a>` : "").join("") || '<span class="meta">—</span>';
     // list + filter
     let filt = null;

@@ -99,3 +99,21 @@ mark { background: var(--cat-source-pale); padding: 0 1px; }
 .facets fieldset.wide { flex: 1 1 360px; }
 .rs-reset { font: .85rem var(--font-nav); border: 1px solid var(--border); background: var(--panel); padding: 3px 8px; cursor: pointer; }
 .filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 10px 0; }
+
+/* register entry page (after the keyword pages of the St. Galler Missiven) */
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin: 18px 0; }
+.two .panel { margin: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips a { display: inline-block; font: .9rem var(--font-nav); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 999px; padding: 2px 10px; color: var(--ink); text-decoration: none; }
+.chips a b { font-weight: 400; color: var(--muted); margin-left: 4px; }
+.chips a:hover { border-color: var(--accent); }
+.tbar { display: grid; grid-template-columns: 3.2rem 1fr 2rem; align-items: center; gap: 8px; font: .85rem var(--font-nav);
+  color: var(--muted); margin: 3px 0; cursor: pointer; }
+.tbar .track { height: 10px; background: #efede8; border-radius: 5px; }
+.tbar .fill { height: 10px; background: var(--accent); border-radius: 5px; }
+.tbar:hover .track { outline: 1px solid var(--border); }
+#esankey svg { width: 100%; height: auto; }
+#esankey text { font: 14px var(--font-nav); fill: var(--ink); } #esankey text tspan.n { fill: var(--muted); }
+#esankey rect, #esankey path { cursor: pointer; }
+.entry-head .auth a { margin-right: 12px; }
