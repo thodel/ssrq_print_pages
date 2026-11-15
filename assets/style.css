@@ -32,8 +32,13 @@ td.no, td.pg { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .vol { font: .85rem var(--font-nav); color: var(--muted); }
 
 /* transcription */
-/* Noto Serif carries the combining superscript letters of the sources (uͦ, uͤ, oͤ, aͤ); Georgia does not */
-.ab { margin: .5rem 0; font-family: "Noto Serif", Georgia, "Iowan Old Style", serif; font-size: 16.5px; line-height: 1.6; }
+/* Junicode (Peter S. Baker, SIL OFL 1.1) carries the combining superscript letters of the sources (aͧ, eͣ, uͦ, oͤ),
+   which Georgia and the Google subset of Noto Serif lack */
+@font-face { font-family: "Junicode"; font-style: normal; font-weight: 300 700; font-display: swap;
+  src: url("fonts/JunicodeVF-Roman.woff2") format("woff2"); }
+@font-face { font-family: "Junicode"; font-style: italic; font-weight: 300 700; font-display: swap;
+  src: url("fonts/JunicodeVF-Italic.woff2") format("woff2"); }
+.ab { margin: .5rem 0; font-family: "Junicode", Georgia, "Iowan Old Style", serif; font-size: 16.5px; line-height: 1.6; }
 .ab .l { display: block; padding-left: 3rem; text-indent: -3rem; }
 .ab .ln { display: inline-block; width: 2.6rem; margin-right: .4rem; text-indent: 0; text-align: right; color: var(--nav-grey);
   font: .75rem var(--font-nav); font-variant-numeric: tabular-nums; }
