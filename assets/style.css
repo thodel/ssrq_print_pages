@@ -119,3 +119,5 @@ mark { background: var(--cat-source-pale); padding: 0 1px; }
 .entry-head .auth a { margin-right: 12px; }
 #efacets { margin-bottom: 4px; } #efacets .filter { max-width: none; margin: 0 0 6px; } #efacets select { max-width: 100%; }
 #efacets fieldset.wide { flex: 1 1 380px; }
+.pill.tei { background: var(--cat-ann-pale); color: var(--cat-ann-dk); font: 600 .72rem var(--font-nav); padding: 1px 6px; border-radius: 3px; }
+section.commentary { border-left: 6px solid var(--cat-pers-pale); } section.commentary .ab { font-size: 15.5px; }

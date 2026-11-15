@@ -81,8 +81,8 @@ if (dtab) fetch("documents.json").then(r => r.json()).then(rows => {
     const hit = rows.filter(r => (!c || r[2] === c) && (!q || fold(r[6]).includes(q)) && inRange(yst, r[4]));
     $("#dn").textContent = `${hit.length} Stücke${hit.length > 1000 ? " (erste 1000 angezeigt)" : ""}`;
     dtab.tBodies[0].innerHTML = hit.slice(0, 1000).map(r =>
-      `<tr><td><a href="../v/${esc(r[1])}/index.html">${esc(r[1])}</a></td><td class="no">${esc(r[3])}</td><td>${esc(r[5])}</td>
-       <td><a href="../v/${esc(r[1])}/d/${slug(r[0].split("-").slice(1).join("-"))}.html">${esc(r[6])}</a></td></tr>`).join("");
+      `<tr><td><a href="../${r[7] === "e" ? "e" : "v"}/${esc(r[1])}/index.html">${esc(r[1])}</a></td><td class="no">${esc(r[3])}</td><td>${esc(r[5])}</td>
+       <td><a href="${r[7] === "e" ? `../e/${esc(r[1])}/d/${slug(r[0])}.html` : `../v/${esc(r[1])}/d/${slug(r[0].split("-").slice(1).join("-"))}.html`}">${esc(r[6])}</a>${r[7] === "e" ? ' <span class="pill tei">TEI</span>' : ""}</td></tr>`).join("");
   };
   yst = dateSlider($("#dyears"), Math.min(...ys), Math.max(...ys), draw);
   ["#dq", "#dc"].forEach(s => $(s).addEventListener("input", draw)); draw();
@@ -245,7 +245,7 @@ if (entryBox) {
     for (const [vol, ids] of Object.entries(E.D)) {
       const vd = await getJSON(`../s/docs/${vol}.json`) || {};
       ids.forEach(id => vd[id] && docs.push({id, vol, k: cantonOf[vol] || vol.split("_")[0], y: vd[id][0], date: vd[id][1], no: vd[id][2],
-        title: vd[id][3], reg: vd[id][4], cites: vd[id][5], slug: vd[id][6]}));
+        title: vd[id][3], reg: vd[id][4], cites: vd[id][5], slug: vd[id][6], ed: vd[id][7] === "e"}));
     }
     docs.sort((a, b) => (a.y || 9999) - (b.y || 9999));
     // labels of the co-occurring entries (for the keyword facet, the chips and the Sankey)
@@ -345,8 +345,8 @@ if (entryBox) {
       const qw = norm($("#eq").value).split(" ").filter(w => w.length >= 2);
       const hl = s => { let h = esc(s); qw.forEach(w => { h = h.replace(new RegExp(`(${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"), "<mark>$1</mark>"); }); return h; };
       $("#edocs").tBodies[0].innerHTML = shown.map(d => `<tr><td class="no">${esc(d.date || d.y || "")}</td>
-        <td class="no"><a href="../v/${esc(d.vol)}/index.html">${esc(d.vol)}</a> ${esc(d.no)}</td>
-        <td><a href="../v/${esc(d.vol)}/d/${esc(d.slug)}.html"><b>${hl(d.title)}</b></a>${d.reg ? `<br><span class="meta">${hl(d.reg)}</span>` : ""}</td></tr>`).join("");
+        <td class="no"><a href="../${d.ed ? "e" : "v"}/${esc(d.vol)}/index.html">${esc(d.vol)}</a> ${esc(d.no)}${d.ed ? ' <span class="pill tei">TEI</span>' : ""}</td>
+        <td><a href="../${d.ed ? "e" : "v"}/${esc(d.vol)}/d/${esc(d.slug)}.html"><b>${hl(d.title)}</b></a>${d.reg ? `<br><span class="meta">${hl(d.reg)}</span>` : ""}</td></tr>`).join("");
     };
     const setClick = (f, scroll = true) => { click = f; drawList(docs.filter(facetOK)); if (scroll && f) $("#edocs-h").scrollIntoView({behavior: "smooth"}); };
     let tmo = null;
