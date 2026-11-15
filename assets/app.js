@@ -220,7 +220,8 @@ if (sk && window.d3 && d3.sankey) getJSON("sankey.json").then(flows => {
 });
 
 // ---------------------------------------------------------------- register entry page (r/eintrag.html#<id>)
-// after the keyword pages of the St. Galler Missiven: Sankey «Begleiter über die Zeit», «Über die Zeit», «Oft zusammen mit»
+// after the keyword pages of the St. Galler Missiven: Sankey «Begleiter über die Zeit», «Über die Zeit», «Oft zusammen mit»,
+// plus a faceted search over the pieces (canton, volume, date, keyword); every view follows the filters
 const entryBox = $("#entry");
 if (entryBox) {
   const FILE = {person: "persons", family: "families", place: "places", org: "orgs", subject: "subjects", glossary: "glossary"};
@@ -229,8 +230,9 @@ if (entryBox) {
   const bin = y => Math.floor(y / 20) * 20;
   const render = async () => {
     const cid = decodeURIComponent(location.hash.slice(1));
-    const E = await entryOf(cid);
+    const [E, meta] = await Promise.all([entryOf(cid), getJSON("../s/search/meta.json")]);
     if (!E) { entryBox.innerHTML = `<p class="todo">Eintrag ${esc(cid)} nicht gefunden.</p>`; return; }
+    const cantonOf = (meta && meta.volcanton) || {}, cantonName = (meta && meta.cantons) || {};
     document.title = `${E.l} · SSRQ Druckbände`;
     const auth = E.a.map(([src, id, name, url]) => url ? `<a href="${esc(url)}" target="_blank">${src.toUpperCase()} ${esc(id)} ${esc(name)} ↗</a>` : `${src.toUpperCase()} ${esc(id)} ${esc(name)}`);
     entryBox.innerHTML = `<div class="panel doc-head entry-head"><p class="kicker">${TYPE[E.t]}</p><h1>${esc(E.l)}</h1>
@@ -242,76 +244,121 @@ if (entryBox) {
     const docs = [];
     for (const [vol, ids] of Object.entries(E.D)) {
       const vd = await getJSON(`../s/docs/${vol}.json`) || {};
-      ids.forEach(id => vd[id] && docs.push({id, vol, y: vd[id][0], date: vd[id][1], no: vd[id][2], title: vd[id][3], reg: vd[id][4], cites: vd[id][5], slug: vd[id][6]}));
+      ids.forEach(id => vd[id] && docs.push({id, vol, k: cantonOf[vol] || vol.split("_")[0], y: vd[id][0], date: vd[id][1], no: vd[id][2],
+        title: vd[id][3], reg: vd[id][4], cites: vd[id][5], slug: vd[id][6]}));
     }
     docs.sort((a, b) => (a.y || 9999) - (b.y || 9999));
-    const co = {};
-    docs.forEach(d => d.cites.forEach(c => { if (c !== cid) co[c] = (co[c] || 0) + 1; }));
-    const ranked = Object.entries(co).sort((a, b) => b[1] - a[1]).slice(0, 80);
+    // labels of the co-occurring entries (for the keyword facet, the chips and the Sankey)
+    const coAll = {};
+    docs.forEach(d => d.cites.forEach(c => { if (c !== cid) coAll[c] = (coAll[c] || 0) + 1; }));
+    const ranked = Object.entries(coAll).sort((a, b) => b[1] - a[1]).slice(0, 150);
     const lab = {};
     await Promise.all(ranked.map(async ([c]) => { lab[c] = await entryOf(c); }));
     // abbreviations the register parser kept as entries ("b.", "t.") are no companions
-    const top = ranked.filter(([c]) => lab[c] && norm(lab[c].l).replace(/ /g, "").length >= 3);
-    $("#echips").innerHTML = top.slice(0, 40).map(([c, n]) => lab[c] ? `<a href="#${c}" title="${TYPE[lab[c].t]}">${esc(lab[c].l)}<b>${n}</b></a>` : "").join("") || '<span class="meta">—</span>';
-    // list + filter
-    let filt = null;
-    const drawList = () => {
-      const shown = docs.filter(d => !filt || filt.test(d));
-      $("#edocs-h").textContent = `Stücke (${shown.length}${filt ? ` von ${docs.length}` : ""})`;
-      $("#efilter").innerHTML = filt ? `Gefiltert: ${esc(filt.label)} <a href="#${esc(cid)}" id="eclear">alle zeigen</a>` : "";
-      if (filt) $("#eclear").onclick = ev => { ev.preventDefault(); filt = null; drawList(); };
+    const usable = c => lab[c] && norm(lab[c].l).replace(/ /g, "").length >= 3;
+    docs.forEach(d => { d.text = norm([d.title, d.reg, ...d.cites.filter(c => lab[c]).map(c => lab[c].l)].join(" ")); });
+
+    // ---- facets: canton, volume, date, keyword (free text over title, regest and co-occurring entries; or one entry)
+    const opt = (v, t) => `<option value="${esc(v)}">${esc(t)}</option>`;
+    const count = key => { const n = {}; docs.forEach(d => n[d[key]] = (n[d[key]] || 0) + 1); return n; };
+    const kc = count("k"), vc = count("vol");
+    $("#efacets").innerHTML = `
+      <fieldset class="wide"><legend>Stichwort</legend><input class="filter" id="eq" type="search" placeholder="Wort in Titel, Regest oder Register …">
+        <select id="ekw">${opt("", "— Registereintrag wählen —")}${ranked.filter(([c]) => usable(c)).map(([c, n]) => opt(c, `${lab[c].l} (${n})`)).join("")}</select></fieldset>
+      <fieldset><legend>Kanton</legend><select id="ek">${opt("", `alle (${docs.length})`)}${Object.keys(kc).sort().map(k => opt(k, `${cantonName[k] || k} (${kc[k]})`)).join("")}</select></fieldset>
+      <fieldset><legend>Band</legend><select id="ev">${opt("", "alle")}${Object.keys(vc).sort().map(v => opt(v, `${v} (${vc[v]})`)).join("")}</select></fieldset>
+      <fieldset class="wide"><legend>Datum</legend><div class="ctl wide" id="ey"></div></fieldset>
+      <fieldset><legend>&nbsp;</legend><button type="button" class="rs-reset" id="ereset">alle Filter löschen</button></fieldset>`;
+    const dated = docs.filter(d => d.y);
+    let yst = null, click = null;
+    const facetOK = d => {
+      const q = norm($("#eq").value).split(" ").filter(w => w.length >= 2);
+      if (q.length && !q.every(w => d.text.includes(w))) return false;
+      if ($("#ekw").value && !d.cites.includes($("#ekw").value)) return false;
+      if ($("#ek").value && d.k !== $("#ek").value) return false;
+      if ($("#ev").value && d.vol !== $("#ev").value) return false;
+      return inRange(yst, d.y);
+    };
+
+    // ---- views on the filtered pieces
+    const draw = () => {
+      const base = docs.filter(facetOK);
+      const active = base.length !== docs.length;
+      $("#ecount").textContent = active ? `${base.length} von ${docs.length} Stücken entsprechen den Filtern.` : `${docs.length} Stücke.`;
+      const co = {};
+      base.forEach(d => d.cites.forEach(c => { if (c !== cid && usable(c)) co[c] = (co[c] || 0) + 1; }));
+      const top = Object.entries(co).sort((a, b) => b[1] - a[1]);
+      $("#echips").innerHTML = top.slice(0, 40).map(([c, n]) => `<a href="#${c}" title="${TYPE[lab[c].t]}">${esc(lab[c].l)}<b>${n}</b></a>`).join("") || '<span class="meta">—</span>';
+      // over time
+      const bd = base.filter(d => d.y);
+      if (dated.length) {
+        const lo = bin(Math.min(...dated.map(d => d.y))) - 20, hi = bin(Math.max(...dated.map(d => d.y))) + 20, cnt = {};
+        bd.forEach(d => cnt[bin(d.y)] = (cnt[bin(d.y)] || 0) + 1);
+        const mx = Math.max(1, ...Object.values(cnt));
+        let h = "";
+        for (let b = lo; b <= hi; b += 20) h += `<div class="tbar" data-b="${b}"><span>${b}</span><div class="track"><div class="fill" style="width:${(cnt[b] || 0) / mx * 100}%"></div></div><span>${cnt[b] || ""}</span></div>`;
+        $("#etime").innerHTML = h;
+        $("#etime").querySelectorAll(".tbar").forEach(el => el.onclick = () => {
+          const b = +el.dataset.b; setClick({label: `${b}–${b + 19}`, test: d => d.y && bin(d.y) === b});
+        });
+      } else $("#etime").innerHTML = '<p class="meta">Keine datierten Stücke.</p>';
+      // sankey: entry -> companions (top 10) -> twenty-year periods
+      const sk = $("#esankey"); sk.innerHTML = "";
+      const comps = top.slice(0, 10).map(([c]) => c);
+      if (window.d3 && d3.sankey && comps.length && bd.length) {
+        const nodes = [{id: cid, name: E.l, kind: "e"}], links = [], per = new Set(), cp = {};
+        comps.forEach(c => { nodes.push({id: c, name: lab[c].l, kind: "c"}); links.push({source: cid, target: c, value: co[c]}); });
+        bd.forEach(d => d.cites.forEach(c => { if (comps.includes(c)) { const k = c + "|" + bin(d.y); cp[k] = (cp[k] || 0) + 1; per.add(bin(d.y)); } }));
+        [...per].sort((a, b) => a - b).forEach(b => nodes.push({id: "p" + b, name: `${b}–${b + 19}`, kind: "p", b}));
+        Object.entries(cp).forEach(([k, v]) => { const [c, b] = k.split("|"); links.push({source: c, target: "p" + b, value: v}); });
+        const W = Math.max(720, sk.clientWidth), H = Math.max(320, Math.max(comps.length, per.size) * 34);
+        const g = d3.sankey().nodeId(d => d.id).nodeWidth(16).nodePadding(10).nodeSort(null).extent([[200, 6], [W - 200, H - 6]])({nodes, links});
+        const svg = d3.select(sk).append("svg").attr("viewBox", `0 0 ${W} ${H}`);
+        svg.append("g").selectAll("path").data(g.links).join("path").attr("class", "lnk").attr("d", d3.sankeyLinkHorizontal())
+          .attr("fill", "none").attr("stroke", "#d6d6d3").attr("stroke-opacity", .9).attr("stroke-width", d => Math.max(1, d.width))
+          .on("mouseover", function () { d3.select(this).attr("stroke", "#e9a3ae"); })
+          .on("mouseout", function () { d3.select(this).attr("stroke", "#d6d6d3"); })
+          .on("click", (ev, d) => {
+            const c = d.source.kind === "c" ? d.source : d.target;
+            setClick(d.target.kind === "p"
+              ? {label: `${c.name}, ${d.target.name}`, test: x => x.cites.includes(c.id) && x.y && bin(x.y) === d.target.b}
+              : {label: c.name, test: x => x.cites.includes(c.id)});
+          }).append("title").text(d => `${d.source.name} → ${d.target.name}: ${d.value}`);
+        const nd = svg.append("g").selectAll("g").data(g.nodes).join("g");
+        nd.append("rect").attr("x", d => d.x0).attr("y", d => d.y0).attr("width", d => d.x1 - d.x0).attr("height", d => Math.max(2, d.y1 - d.y0))
+          .attr("fill", d => d.kind === "e" ? "#212529" : d.kind === "c" ? "#6b6b6b" : "#4a4a4a")
+          .on("click", (ev, d) => d.kind === "c" ? setClick({label: d.name, test: x => x.cites.includes(d.id)})
+            : d.kind === "p" ? setClick({label: d.name, test: x => x.y && bin(x.y) === d.b}) : setClick(null));
+        const t = nd.append("text").attr("y", d => (d.y0 + d.y1) / 2).attr("dy", "0.35em")
+          .attr("x", d => d.kind === "e" ? d.x0 - 10 : d.x1 + 8).attr("text-anchor", d => d.kind === "e" ? "end" : "start");
+        t.append("tspan").text(d => d.name.length > 40 ? d.name.slice(0, 38) + "…" : d.name);
+        t.append("tspan").attr("class", "n").text(d => d.kind === "e" ? "" : ` ${d.value}`);
+        $("#esankey-note").textContent = `Von «${E.l}» zu den Einträgen, die am häufigsten in denselben Stücken vorkommen, und weiter zu den zwanzig Jahren dieser Stücke${active ? " (nur die gefilterten Stücke)" : ""}. Die Breite eines Bands ist die Zahl der Stücke mit beiden Einträgen; ein Stück mit mehreren dieser Begleiter zählt bei jedem. Ein Klick auf ein Band oder ein Feld filtert die Stücke unten.`;
+      } else $("#esankey-note").textContent = "Zu wenig gemeinsame, datierte Stücke für eine Darstellung.";
+      drawList(base);
+    };
+    const drawList = base => {
+      const shown = base.filter(d => !click || click.test(d));
+      $("#edocs-h").textContent = `Stücke (${shown.length}${shown.length !== docs.length ? ` von ${docs.length}` : ""})`;
+      $("#efilter").innerHTML = click ? `Auswahl: ${esc(click.label)} <a href="#${esc(cid)}" id="eclear">aufheben</a>` : "";
+      if (click) $("#eclear").onclick = ev => { ev.preventDefault(); setClick(null, false); };
+      const qw = norm($("#eq").value).split(" ").filter(w => w.length >= 2);
+      const hl = s => { let h = esc(s); qw.forEach(w => { h = h.replace(new RegExp(`(${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"), "<mark>$1</mark>"); }); return h; };
       $("#edocs").tBodies[0].innerHTML = shown.map(d => `<tr><td class="no">${esc(d.date || d.y || "")}</td>
         <td class="no"><a href="../v/${esc(d.vol)}/index.html">${esc(d.vol)}</a> ${esc(d.no)}</td>
-        <td><a href="../v/${esc(d.vol)}/d/${esc(d.slug)}.html"><b>${esc(d.title)}</b></a>${d.reg ? `<br><span class="meta">${esc(d.reg)}</span>` : ""}</td></tr>`).join("");
+        <td><a href="../v/${esc(d.vol)}/d/${esc(d.slug)}.html"><b>${hl(d.title)}</b></a>${d.reg ? `<br><span class="meta">${hl(d.reg)}</span>` : ""}</td></tr>`).join("");
     };
-    const setFilter = f => { filt = f; drawList(); $("#edocs-h").scrollIntoView({behavior: "smooth"}); };
-    // over time: twenty-year bars
-    const dated = docs.filter(d => d.y);
-    if (dated.length) {
-      const lo = bin(Math.min(...dated.map(d => d.y))) - 20, hi = bin(Math.max(...dated.map(d => d.y))) + 20, cnt = {};
-      dated.forEach(d => cnt[bin(d.y)] = (cnt[bin(d.y)] || 0) + 1);
-      const mx = Math.max(...Object.values(cnt));
-      let h = "";
-      for (let b = lo; b <= hi; b += 20) h += `<div class="tbar" data-b="${b}"><span>${b}</span><div class="track"><div class="fill" style="width:${(cnt[b] || 0) / mx * 100}%"></div></div><span>${cnt[b] || ""}</span></div>`;
-      $("#etime").innerHTML = h;
-      $("#etime").querySelectorAll(".tbar").forEach(el => el.onclick = () => {
-        const b = +el.dataset.b; setFilter({label: `${b}–${b + 19}`, test: d => d.y && bin(d.y) === b});
-      });
-    } else $("#etime").innerHTML = '<p class="meta">Keine datierten Stücke.</p>';
-    // sankey: entry -> companions (top 10) -> twenty-year periods
-    const sk = $("#esankey"); sk.innerHTML = "";
-    const comps = top.slice(0, 10).map(([c]) => c).filter(c => lab[c]);
-    if (window.d3 && d3.sankey && comps.length && dated.length) {
-      const nodes = [{id: cid, name: E.l, kind: "e"}], links = [], per = new Set();
-      comps.forEach(c => { nodes.push({id: c, name: lab[c].l, kind: "c"}); links.push({source: cid, target: c, value: co[c]}); });
-      const cp = {};
-      dated.forEach(d => d.cites.forEach(c => { if (comps.includes(c)) { const k = c + "|" + bin(d.y); cp[k] = (cp[k] || 0) + 1; per.add(bin(d.y)); } }));
-      [...per].sort((a, b) => a - b).forEach(b => nodes.push({id: "p" + b, name: `${b}–${b + 19}`, kind: "p", b}));
-      Object.entries(cp).forEach(([k, v]) => { const [c, b] = k.split("|"); links.push({source: c, target: "p" + b, value: v}); });
-      const W = Math.max(720, sk.clientWidth), H = Math.max(320, Math.max(comps.length, per.size) * 34);
-      const g = d3.sankey().nodeId(d => d.id).nodeWidth(16).nodePadding(10).nodeSort(null).extent([[200, 6], [W - 200, H - 6]])({nodes, links});
-      const svg = d3.select(sk).append("svg").attr("viewBox", `0 0 ${W} ${H}`);
-      svg.append("g").selectAll("path").data(g.links).join("path").attr("class", "lnk").attr("d", d3.sankeyLinkHorizontal())
-        .attr("fill", "none").attr("stroke", "#d6d6d3").attr("stroke-opacity", .9).attr("stroke-width", d => Math.max(1, d.width))
-        .on("mouseover", function () { d3.select(this).attr("stroke", "#e9a3ae"); })
-        .on("mouseout", function () { d3.select(this).attr("stroke", "#d6d6d3"); }).on("click", (ev, d) => {
-          const c = d.source.kind === "c" ? d.source : d.target;
-          setFilter(d.target.kind === "p"
-            ? {label: `${c.name}, ${d.target.name}`, test: x => x.cites.includes(c.id) && x.y && bin(x.y) === d.target.b}
-            : {label: c.name, test: x => x.cites.includes(c.id)});
-        }).append("title").text(d => `${d.source.name} → ${d.target.name}: ${d.value}`);
-      const nd = svg.append("g").selectAll("g").data(g.nodes).join("g");
-      nd.append("rect").attr("x", d => d.x0).attr("y", d => d.y0).attr("width", d => d.x1 - d.x0).attr("height", d => Math.max(2, d.y1 - d.y0))
-        .attr("fill", d => d.kind === "e" ? "#212529" : d.kind === "c" ? "#6b6b6b" : "#4a4a4a")
-        .on("click", (ev, d) => d.kind === "c" ? setFilter({label: d.name, test: x => x.cites.includes(d.id)})
-          : d.kind === "p" ? setFilter({label: d.name, test: x => x.y && bin(x.y) === d.b}) : setFilter(null));
-      const t = nd.append("text").attr("y", d => (d.y0 + d.y1) / 2).attr("dy", "0.35em")
-        .attr("x", d => d.kind === "e" ? d.x0 - 10 : d.x1 + 8).attr("text-anchor", d => d.kind === "e" ? "end" : "start");
-      t.append("tspan").text(d => d.name.length > 40 ? d.name.slice(0, 38) + "…" : d.name);
-      t.append("tspan").attr("class", "n").text(d => d.kind === "e" ? "" : ` ${d.value}`);
-      $("#esankey-note").textContent = `Von «${E.l}» zu den Einträgen, die am häufigsten in denselben Stücken vorkommen, und weiter zu den zwanzig Jahren dieser Stücke. Die Breite eines Bands ist die Zahl der Stücke mit beiden Einträgen; ein Stück mit mehreren dieser Begleiter zählt bei jedem. Ein Klick auf ein Band oder ein Feld filtert die Stücke unten.`;
-    } else $("#esankey-note").textContent = "Zu wenig gemeinsame, datierte Stücke für eine Darstellung.";
-    drawList();
+    const setClick = (f, scroll = true) => { click = f; drawList(docs.filter(facetOK)); if (scroll && f) $("#edocs-h").scrollIntoView({behavior: "smooth"}); };
+    let tmo = null;
+    const redraw = () => { clearTimeout(tmo); tmo = setTimeout(() => { click = null; draw(); }, 200); };
+    if (dated.length > 1) yst = dateSlider($("#ey"), Math.min(...dated.map(d => d.y)), Math.max(...dated.map(d => d.y)), redraw, "");
+    else $("#ey").innerHTML = '<span class="meta">—</span>';
+    ["#eq", "#ekw", "#ek", "#ev"].forEach(sel => $(sel).addEventListener("input", redraw));
+    $("#ereset").onclick = () => {
+      ["#eq", "#ekw", "#ek", "#ev"].forEach(sel => { $(sel).value = ""; });
+      const rs = $("#ey .rs-reset"); if (rs) rs.click(); click = null; draw();
+    };
+    draw();
     window.scrollTo(0, 0);
   };
   window.addEventListener("hashchange", render); render();

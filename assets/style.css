@@ -117,3 +117,5 @@ mark { background: var(--cat-source-pale); padding: 0 1px; }
 #esankey text { font: 14px var(--font-nav); fill: var(--ink); } #esankey text tspan.n { fill: var(--muted); }
 #esankey rect, #esankey path { cursor: pointer; }
 .entry-head .auth a { margin-right: 12px; }
+#efacets { margin-bottom: 4px; } #efacets .filter { max-width: none; margin: 0 0 6px; } #efacets select { max-width: 100%; }
+#efacets fieldset.wide { flex: 1 1 380px; }
