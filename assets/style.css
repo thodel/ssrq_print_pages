@@ -59,6 +59,11 @@ a.ent:hover { background: var(--hl); }
 a.ent.persons { border-color: var(--cat-pers); } a.ent.places { border-color: var(--cat-ann); }
 a.ent.families { border-color: var(--cat-source); } a.ent.orgs { border-color: #a58fd0; }
 a.ent.subjects { border-color: #8fb3d9; } a.ent.glossary { border-color: #b8b8b8; border-bottom-style: dotted; }
+.legend .lg { color: var(--text, #222); padding-bottom: 1px; border-bottom: 3px solid; }
+.legend .lg.persons { border-color: var(--cat-pers); } .legend .lg.places { border-color: var(--cat-ann); }
+.legend .lg.families { border-color: var(--cat-source); } .legend .lg.orgs { border-color: #a58fd0; }
+.legend .lg.subjects { border-color: #8fb3d9; } .legend .lg.glossary { border-color: #b8b8b8; border-bottom-style: dotted; }
+.legend .hint { color: var(--muted); }
 .legend { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font: .9rem var(--font-nav); color: var(--muted); }
 .legend .sw { display: inline-block; width: 22px; height: 0; border-bottom: 3px solid; margin-right: 6px; vertical-align: middle; }
 
