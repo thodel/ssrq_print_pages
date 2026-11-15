@@ -2,6 +2,23 @@
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const slug = s => String(s).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "x";
+// volume id → SSRQ citation form (AG_I_1 → AG I/1, ZH_NF_I_2_1 → ZH NF I/2/1); same rules as ssrq_print/names.py
+const VOL_SPECIAL = {AR_AI_1: "AR/AI 1", BE_I_1_und_2: "BE I/1–2", GR_B_III_1_12: "GR B III/1 (Teile 1–2)",
+  GR_B_III_1_34: "GR B III/1 (Teile 3–4)", Bischofszell_Teil_1: "Bischofszell, Teil 1", Bischofszell_Teil_2: "Bischofszell, Teil 2",
+  Bischofszell_Teil_3: "Bischofszell, Teil 3", Entlebuch_mit_Links: "Entlebuch", Hinterrhein_mit_Links: "Hinterrhein",
+  Rheintal_mit_Links: "Rheintal", Sargans_mit_Links: "Sargans", Registrum_Lombardorum: "Registrum Lombardorum"};
+const volLabel = v => {
+  if (!v) return "";
+  if (VOL_SPECIAL[v]) return VOL_SPECIAL[v];
+  const k = /^thurgau_k(\d+)_low$/.exec(v); if (k) return `Thurgau, Karte ${k[1]}`;
+  if (!/^[A-Z]{2}_/.test(v)) return v.replace(/_/g, " ");
+  const t = v.split("_"), head = [t[0]], rest = t.slice(1), roman = x => /^[IVX]+$/.test(x);
+  while (rest.length && !roman(rest[0]) && !/^\d/.test(rest[0])) head.push(rest.shift());
+  let s;
+  if (rest.length && roman(rest[0])) { head.push(rest.shift()); s = head.join(" ") + (rest.length ? "/" + rest.join("/") : ""); }
+  else s = head.join(" ") + (rest.length ? " " + rest.join("/") : "");
+  return s.replace(/-/g, "–");
+};
 const fold = s => String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/ſ/g, "s").toLowerCase();
 
 // date slider (two thumbs; markup and CSS from Vernetzte Schweiz: .ctl.wide > .yr-label + .rs + .yr-label)
@@ -110,7 +127,7 @@ if (sform) (async () => {
   $("#facets").innerHTML = `
     <fieldset><legend>Typ</legend><select id="f-typ">${opt("", "alle")}${Object.entries(TYPE).map(([k, v]) => opt(k, v, st.typ)).join("")}</select></fieldset>
     <fieldset><legend>Kanton</legend><select id="f-kanton">${opt("", "alle")}${Object.entries(meta.cantons).map(([k, v]) => opt(k, v, st.kanton)).join("")}</select></fieldset>
-    <fieldset><legend>Band</legend><select id="f-band">${opt("", "alle")}${meta.volumes.map(v => opt(v, v, st.band)).join("")}</select></fieldset>
+    <fieldset><legend>Band</legend><select id="f-band">${opt("", "alle")}${meta.volumes.map(v => opt(v, volLabel(v), st.band)).join("")}</select></fieldset>
     <fieldset class="wide"><legend>Zeitraum der Stücke</legend><div class="ctl wide" id="f-years"></div></fieldset>
     <fieldset><legend>Normdaten</legend><select id="f-norm">${opt("", "alle")}${[["hls", "HLS verknüpft"], ["ssrq", "SSRQ verknüpft"], ["kf", "Königsfelden verknüpft"], ["amb", "mehrdeutig"], ["none", "ohne Normdaten"]].map(([k, v]) => opt(k, v, st.norm)).join("")}</select></fieldset>
     <fieldset><legend>Weitere</legend><label><input type="checkbox" id="f-karte"${st.karte ? " checked" : ""}> auf der Karte</label>
@@ -149,7 +166,7 @@ if (sform) (async () => {
     const hl = s => { let h = esc(s); words.forEach(w => { h = h.replace(new RegExp(`(^|[^\\p{L}])(${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "giu"), "$1<mark>$2</mark>"); }); return h; };
     $("#shits").innerHTML = all.slice(0, 300).map(r => `<li class="${r.t}"><a href="../r/eintrag.html#${r.i}"><b>${hl(r.l)}</b></a>
       ${r.v.length ? `<span class="var">(${hl(r.v.join(", "))})</span>` : ""} ${r.d ? "— " + hl(r.d) : ""}
-      <div class="refs">${TYPE[r.t]} · ${r.n} Stücke · ${esc(r.b.join(", "))}${r.m ? ` · <a href="../k/o/${r.i}.html">Ortskarte</a>` : ""}${r.e ? ` · ${r.e} in neuen Bänden` : ""}
+      <div class="refs">${TYPE[r.t]} · ${r.n} Stücke · ${esc(r.b.map(volLabel).join(", "))}${r.m ? ` · <a href="../k/o/${r.i}.html">Ortskarte</a>` : ""}${r.e ? ` · ${r.e} in neuen Bänden` : ""}
       ${Object.entries(r.a || {}).filter(([, v]) => v === "match").map(([k]) => `<span class="ty">${k.toUpperCase()} ✓</span>`).join(" ")}</div></li>`).join("");
   };
   let yst = null, tmo = null;
@@ -167,7 +184,7 @@ if (bigmap && window.L) getJSON("places.json").then(pts => {
   const layer = L.featureGroup().addTo(map);
   const marks = pts.map(([id, lab, lat, lon, n, vols, conf, span]) => [span, L.circleMarker([lat, lon], {
       radius: 4 + Math.sqrt(n) * 1.6, color: "#175b5b", weight: 1, fillColor: "#64c8c8", fillOpacity: conf === "möglich" ? .35 : .75})
-    .bindPopup(`<b><a href="o/${id}.html">${esc(lab)}</a></b><br>${n} Stücke${span && span.length ? ` (${span[0]}–${span[1]})` : ""}<br>${esc(vols.join(", "))}`)]);
+    .bindPopup(`<b><a href="o/${id}.html">${esc(lab)}</a></b><br>${n} Stücke${span && span.length ? ` (${span[0]}–${span[1]})` : ""}<br>${esc(vols.map(volLabel).join(", "))}`)]);
   marks.forEach(([, m]) => m.addTo(layer));
   // focus on the core: the middle 90 % of the points (a few register places lie far away, e.g. Ungarn)
   if (pts.length) {
@@ -266,7 +283,7 @@ if (entryBox) {
       <fieldset class="wide"><legend>Stichwort</legend><input class="filter" id="eq" type="search" placeholder="Wort in Titel, Regest oder Register …">
         <select id="ekw">${opt("", "— Registereintrag wählen —")}${ranked.filter(([c]) => usable(c)).map(([c, n]) => opt(c, `${lab[c].l} (${n})`)).join("")}</select></fieldset>
       <fieldset><legend>Kanton</legend><select id="ek">${opt("", `alle (${docs.length})`)}${Object.keys(kc).sort().map(k => opt(k, `${cantonName[k] || k} (${kc[k]})`)).join("")}</select></fieldset>
-      <fieldset><legend>Band</legend><select id="ev">${opt("", "alle")}${Object.keys(vc).sort().map(v => opt(v, `${v} (${vc[v]})`)).join("")}</select></fieldset>
+      <fieldset><legend>Band</legend><select id="ev">${opt("", "alle")}${Object.keys(vc).sort().map(v => opt(v, `${volLabel(v)} (${vc[v]})`)).join("")}</select></fieldset>
       <fieldset class="wide"><legend>Datum</legend><div class="ctl wide" id="ey"></div></fieldset>
       <fieldset><legend>&nbsp;</legend><button type="button" class="rs-reset" id="ereset">alle Filter löschen</button></fieldset>`;
     const dated = docs.filter(d => d.y);
@@ -345,7 +362,7 @@ if (entryBox) {
       const qw = norm($("#eq").value).split(" ").filter(w => w.length >= 2);
       const hl = s => { let h = esc(s); qw.forEach(w => { h = h.replace(new RegExp(`(${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"), "<mark>$1</mark>"); }); return h; };
       $("#edocs").tBodies[0].innerHTML = shown.map(d => `<tr><td class="no">${esc(d.date || d.y || "")}</td>
-        <td class="no"><a href="../${d.ed ? "e" : "v"}/${esc(d.vol)}/index.html">${esc(d.vol)}</a> ${esc(d.no)}${d.ed ? ' <span class="pill tei">TEI</span>' : ""}</td>
+        <td class="no"><a href="../${d.ed ? "e" : "v"}/${esc(d.vol)}/index.html">${esc(volLabel(d.vol))}</a> ${esc(d.no)}${d.ed ? ' <span class="pill tei">TEI</span>' : ""}</td>
         <td><a href="../${d.ed ? "e" : "v"}/${esc(d.vol)}/d/${esc(d.slug)}.html"><b>${hl(d.title)}</b></a>${d.reg ? `<br><span class="meta">${hl(d.reg)}</span>` : ""}</td></tr>`).join("");
     };
     const setClick = (f, scroll = true) => { click = f; drawList(docs.filter(facetOK)); if (scroll && f) $("#edocs-h").scrollIntoView({behavior: "smooth"}); };
