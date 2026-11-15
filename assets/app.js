@@ -290,7 +290,9 @@ if (entryBox) {
       const g = d3.sankey().nodeId(d => d.id).nodeWidth(16).nodePadding(10).nodeSort(null).extent([[200, 6], [W - 200, H - 6]])({nodes, links});
       const svg = d3.select(sk).append("svg").attr("viewBox", `0 0 ${W} ${H}`);
       svg.append("g").selectAll("path").data(g.links).join("path").attr("class", "lnk").attr("d", d3.sankeyLinkHorizontal())
-        .attr("stroke-width", d => Math.max(1, d.width)).on("click", (ev, d) => {
+        .attr("fill", "none").attr("stroke", "#d6d6d3").attr("stroke-opacity", .9).attr("stroke-width", d => Math.max(1, d.width))
+        .on("mouseover", function () { d3.select(this).attr("stroke", "#e9a3ae"); })
+        .on("mouseout", function () { d3.select(this).attr("stroke", "#d6d6d3"); }).on("click", (ev, d) => {
           const c = d.source.kind === "c" ? d.source : d.target;
           setFilter(d.target.kind === "p"
             ? {label: `${c.name}, ${d.target.name}`, test: x => x.cites.includes(c.id) && x.y && bin(x.y) === d.target.b}
