@@ -363,3 +363,32 @@ if (entryBox) {
   };
   window.addEventListener("hashchange", render); render();
 }
+
+// ---------------------------------------------------------------- context of references (ssrq_print.refs)
+// hover or keyboard focus on a reference shows what it cites: the target piece (number, title, date) or the
+// external edition, and the cited lines (the cited one highlighted). Click follows the link as before.
+(() => {
+  let pop = null;
+  const hide = () => { if (pop) { pop.remove(); pop = null; } };
+  const show = a => {
+    hide();
+    let d; try { d = JSON.parse(a.dataset.ctx); } catch (e) { return; }
+    const cited = (a.getAttribute("title") || "").match(/Z\. (\d+)/);
+    const lines = (d.c || []).map(([n, t]) => `<div class="rl${cited && String(n) === cited[1] ? " on" : ""}">` +
+      `${n != null ? `<span class="ln">${esc(n)}</span>` : ""}${esc(t)}</div>`).join("");
+    pop = document.createElement("div");
+    pop.className = "refpop";
+    pop.innerHTML = `<div class="rh">${esc(d.l)}</div>${lines || '<div class="rl meta">— keine Zeilen verfügbar —</div>'}` +
+      `<div class="rs">${d.k === "extern" ? "Text: e-periodica (OCR), kurzer Auszug" : "SSRQ, neu gelesen"} · Klick öffnet die Stelle</div>`;
+    document.body.appendChild(pop);
+    const r = a.getBoundingClientRect(), w = Math.min(460, window.innerWidth - 24);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(12, Math.min(window.scrollX + r.left, window.scrollX + window.innerWidth - w - 12)) + "px";
+    pop.style.top = (window.scrollY + r.bottom + 6) + "px";
+  };
+  document.addEventListener("mouseover", ev => { const a = ev.target.closest("a.xref[data-ctx]"); if (a) show(a); });
+  document.addEventListener("mouseout", ev => { if (ev.target.closest("a.xref[data-ctx]")) hide(); });
+  document.addEventListener("focusin", ev => { const a = ev.target.closest("a.xref[data-ctx]"); if (a) show(a); });
+  document.addEventListener("focusout", hide);
+  document.addEventListener("keydown", ev => { if (ev.key === "Escape") hide(); });
+})();

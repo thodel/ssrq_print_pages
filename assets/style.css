@@ -129,3 +129,10 @@ mark { background: var(--cat-source-pale); padding: 0 1px; }
 section.commentary { border-left: 6px solid var(--cat-pers-pale); } section.commentary .ab { font-size: 15.5px; }
 a.xref { color: var(--link); text-decoration: none; border-bottom: 1px dashed var(--link); } a.xref.ssrq::after { content: " ↗"; font-size: .8em; }
 a.xref.extern::after { content: " ↗"; font-size: .8em; }
+.refpop { position: absolute; z-index: 1000; background: var(--panel); border: 1px solid var(--border); border-top: 4px solid var(--link);
+  box-shadow: 0 6px 18px rgba(0,0,0,.12); padding: 10px 12px; font-size: 14px; }
+.refpop .rh { font: 600 .95rem var(--font-nav); margin-bottom: 6px; }
+.refpop .rl { font-family: "Junicode", Georgia, serif; font-size: 15px; line-height: 1.45; padding: 1px 4px; }
+.refpop .rl.on { background: var(--cat-source-pale); }
+.refpop .ln { display: inline-block; width: 2rem; color: var(--nav-grey); font: .75rem var(--font-nav); }
+.refpop .rs { margin-top: 6px; font: .8rem var(--font-nav); color: var(--muted); }
