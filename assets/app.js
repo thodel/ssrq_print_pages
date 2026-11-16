@@ -3,14 +3,14 @@ const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const slug = s => String(s).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "x";
 // volume id → SSRQ citation form (AG_I_1 → AG I/1, ZH_NF_I_2_1 → ZH NF I/2/1); same rules as ssrq_print/names.py
-const VOL_SPECIAL = {AR_AI_1: "AR/AI 1", BE_I_1_und_2: "BE I/1–2", GR_B_III_1_12: "GR B III/1 (Teile 1–2)",
-  GR_B_III_1_34: "GR B III/1 (Teile 3–4)", Bischofszell_Teil_1: "Bischofszell, Teil 1", Bischofszell_Teil_2: "Bischofszell, Teil 2",
-  Bischofszell_Teil_3: "Bischofszell, Teil 3", Entlebuch_mit_Links: "Entlebuch", Hinterrhein_mit_Links: "Hinterrhein",
-  Rheintal_mit_Links: "Rheintal", Sargans_mit_Links: "Sargans", Registrum_Lombardorum: "Registrum Lombardorum"};
+const VOL_SPECIAL = {AR_AI_1: "AR/AI 1", BE_I_1_und_2: "BE I/1–2", GR_B_III_1_12: "GR B III/1.1–2",
+  GR_B_III_1_34: "GR B III/1.3–4", Bischofszell_Teil_1: "TG II/2.1", Bischofszell_Teil_2: "TG II/2.2",
+  Bischofszell_Teil_3: "TG II/2.3", Entlebuch_mit_Links: "LU II/3", Hinterrhein_mit_Links: "GR B III/2",
+  Rheintal_mit_Links: "SG III/3", Sargans_mit_Links: "SG III/2", Registrum_Lombardorum: "FR I/3/7"};
 const volLabel = v => {
   if (!v) return "";
   if (VOL_SPECIAL[v]) return VOL_SPECIAL[v];
-  const k = /^thurgau_k(\d+)_low$/.exec(v); if (k) return `Thurgau, Karte ${k[1]}`;
+  const k = /^thurgau_k(\d+)_low$/.exec(v); if (k) return `TG I/1.1, Karte ${k[1]}`;
   if (!/^[A-Z]{2}_/.test(v)) return v.replace(/_/g, " ");
   const t = v.split("_"), head = [t[0]], rest = t.slice(1), roman = x => /^[IVX]+$/.test(x);
   while (rest.length && !roman(rest[0]) && !/^\d/.test(rest[0])) head.push(rest.shift());
