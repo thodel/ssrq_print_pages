@@ -129,7 +129,7 @@ if (sform) (async () => {
     <fieldset><legend>Kanton</legend><select id="f-kanton">${opt("", "alle")}${Object.entries(meta.cantons).map(([k, v]) => opt(k, v, st.kanton)).join("")}</select></fieldset>
     <fieldset><legend>Band</legend><select id="f-band">${opt("", "alle")}${meta.volumes.map(v => opt(v, volLabel(v), st.band)).join("")}</select></fieldset>
     <fieldset class="wide"><legend>Zeitraum der Stücke</legend><div class="ctl wide" id="f-years"></div></fieldset>
-    <fieldset><legend>Normdaten</legend><select id="f-norm">${opt("", "alle")}${[["hls", "HLS verknüpft"], ["ssrq", "SSRQ verknüpft"], ["kf", "Königsfelden verknüpft"], ["amb", "mehrdeutig"], ["none", "ohne Normdaten"]].map(([k, v]) => opt(k, v, st.norm)).join("")}</select></fieldset>
+    <fieldset><legend>Normdaten</legend><select id="f-norm">${opt("", "alle")}${[["hls", "HLS verknüpft"], ["ssrq", "SSRQ verknüpft"], ["kf", "Königsfelden verknüpft"], ["idiotikon", "Idiotikon verknüpft"], ["lexer", "Lexer verknüpft"], ["dwb", "Grimm (DWB) verknüpft"], ["dwb2", "Grimm (DWB2) verknüpft"], ["drw", "Rechtswörterbuch (DRW) verknüpft"], ["fwb", "Frühnhd. Wörterbuch (FWB) verknüpft"], ["findeb", "Findebuch verknüpft"], ["bmz", "BMZ verknüpft"], ["amb", "mehrdeutig"], ["none", "ohne Normdaten"]].map(([k, v]) => opt(k, v, st.norm)).join("")}</select></fieldset>
     <fieldset><legend>Weitere</legend><label><input type="checkbox" id="f-karte"${st.karte ? " checked" : ""}> auf der Karte</label>
       <label><input type="checkbox" id="f-neu"> in neuen Bänden</label></fieldset>`;
   const chunks = {};
@@ -148,7 +148,7 @@ if (sform) (async () => {
     const n = f("#f-norm"), a = r.a || {};
     if (n === "amb" && !Object.values(a).includes("ambiguous")) return false;
     if (n === "none" && Object.values(a).some(x => x === "match" || x === "ambiguous")) return false;
-    if (["hls", "ssrq", "kf"].includes(n) && a[n] !== "match") return false;
+    if (["hls", "ssrq", "kf", "idiotikon", "lexer", "dwb", "dwb2", "drw", "fwb", "findeb", "bmz"].includes(n) && a[n] !== "match") return false;
     if ($("#f-karte").checked && !r.m) return false;
     if ($("#f-neu").checked && !r.e) return false;
     return true;
