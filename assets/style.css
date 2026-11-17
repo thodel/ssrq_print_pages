@@ -141,3 +141,11 @@ a.xref.extern::after { content: " ↗"; font-size: .8em; }
 .refpop .rl.on { background: var(--cat-source-pale); }
 .refpop .ln { display: inline-block; width: 2rem; color: var(--nav-grey); font: .75rem var(--font-nav); }
 .refpop .rs { margin-top: 6px; font: .8rem var(--font-nav); color: var(--muted); }
+
+/* register review: main entries and their merged / sub / related entries */
+.partof { font: .95rem var(--font-nav); color: var(--muted); margin: .3em 0; }
+.rel { display: inline-block; font: .75rem var(--font-nav); padding: 0 6px; border-radius: 3px; background: #eee; color: #444; }
+.rel.sub { background: #e8eefb; color: #2a4f8f; } .rel.related { background: #f3eee2; color: #7a5a17; }
+.rel.same { background: #e9f4ee; color: #26663f; }
+ul.children { list-style: none; padding-left: 1.2em; margin: .3em 0; } ul.children li { margin: .15em 0; }
+details.children summary { cursor: pointer; font: .95rem var(--font-nav); }

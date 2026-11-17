@@ -19,6 +19,7 @@ const volLabel = v => {
   else s = head.join(" ") + (rest.length ? " " + rest.join("/") : "");
   return s.replace(/-/g, "–");
 };
+const REL = {same: "zusammengeführt", sub: "Untereintrag", related: "verwandt"};
 const fold = s => String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/ſ/g, "s").toLowerCase();
 
 // date slider (two thumbs; markup and CSS from Vernetzte Schweiz: .ctl.wide > .yr-label + .rs + .yr-label)
@@ -166,6 +167,7 @@ if (sform) (async () => {
     const hl = s => { let h = esc(s); words.forEach(w => { h = h.replace(new RegExp(`(^|[^\\p{L}])(${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "giu"), "$1<mark>$2</mark>"); }); return h; };
     $("#shits").innerHTML = all.slice(0, 300).map(r => `<li class="${r.t}"><a href="../r/eintrag.html#${r.i}"><b>${hl(r.l)}</b></a>
       ${r.v.length ? `<span class="var">(${hl(r.v.join(", "))})</span>` : ""} ${r.d ? "— " + hl(r.d) : ""}
+      ${r.g ? `<span class="partof">→ <a href="../r/eintrag.html#${esc(r.g[0])}">${esc(r.g[1])}</a> (${esc(REL[r.g[2]] || r.g[2])})</span>` : ""}${r.s ? ` <span class="ty">${r.s} zugeordnete Einträge</span>` : ""}
       <div class="refs">${TYPE[r.t]} · ${r.n} Stücke · ${esc(r.b.map(volLabel).join(", "))}${r.m ? ` · <a href="../k/o/${r.i}.html">Ortskarte</a>` : ""}${r.e ? ` · ${r.e} in neuen Bänden` : ""}
       ${Object.entries(r.a || {}).filter(([, v]) => v === "match").map(([k]) => `<span class="ty">${k.toUpperCase()} ✓</span>`).join(" ")}</div></li>`).join("");
   };
@@ -254,6 +256,8 @@ if (entryBox) {
     const auth = E.a.map(([src, id, name, url]) => url ? `<a href="${esc(url)}" target="_blank">${src.toUpperCase()} ${esc(id)} ${esc(name)} ↗</a>` : `${src.toUpperCase()} ${esc(id)} ${esc(name)}`);
     entryBox.innerHTML = `<div class="panel doc-head entry-head"><p class="kicker">${TYPE[E.t]}</p><h1>${esc(E.l)}</h1>
       ${E.v.length ? `<p class="meta">Schreibweisen: ${esc(E.v.join(", "))}</p>` : ""}${E.d ? `<p>${esc(E.d)}</p>` : ""}
+      ${E.G ? `<p class="partof">${esc((REL[E.G[2]] || E.G[2]).replace(/^./, c => c.toUpperCase()))} von <a href="#${esc(E.G[0])}"><b>${esc(E.G[1])}</b></a>${E.G[3] ? " — " + esc(E.G[3]) : ""}</p>` : ""}
+      ${E.S && E.S.length ? `<details class="children" open><summary>${E.S.length} zugeordnete Einträge (Stücke zusammengefasst)</summary><ul>${E.S.map(([i, l, rel, q]) => `<li><span class="rel ${rel}">${esc(REL[rel] || rel)}</span> <a href="#${esc(i)}">${esc(l)}</a>${q && rel !== "same" ? " — " + esc(q) : ""}</li>`).join("")}</ul></details>` : ""}
       <p class="auth">${auth.join(" ")}</p><p class="links">
       ${E.m ? `<a href="../k/o/${esc(cid)}.html">Ortskarte</a>` : ""}${E.e ? `<a href="../e/x/${esc(cid)}.html">in den neuen Bänden (${E.e})</a>` : ""}
       <a href="${E.t}/${E.L}.html#${esc(cid)}">im Register ${TYPE[E.t]}, ${E.L}</a> <a href="../s/suche.html?q=${encodeURIComponent(E.l)}">in der Suche</a></p></div>`;
