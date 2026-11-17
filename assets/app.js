@@ -413,3 +413,70 @@ if (entryBox) {
   document.addEventListener("focusout", hide);
   document.addEventListener("keydown", ev => { if (ev.key === "Escape") hide(); });
 })();
+
+// ---------------------------------------------------------------- reference tracking (s/verweise.html)
+const lm = $("#linkmatrix");
+if (lm && window.d3) getJSON("links.json").then(D => {
+  if (!D) return;
+  const LEV = {stueck: "Stück", seite: "Seite", band: "Band", extern: "extern"};
+  const sel = () => ({k: $("#lkind").value, l: $("#llevel").value, b: $("#lbroken").checked});
+  const vlab = Object.fromEntries(D.volumes.map(v => [v.id, v.label]));
+  const draw = () => {
+    const f = sel();
+    const E = D.edges.filter(([s, t, k, lv, n, b]) => (!f.k || k === f.k) && (!f.l || lv === f.l) && (!f.b || b > 0) && t !== "?");
+    const cell = new Map();
+    for (const [s, t, k, lv, n, b] of E) {
+      const key = s + "|" + t, c = cell.get(key) || {s, t, n: 0, b: 0};
+      c.n += f.b ? b : n; c.b += b; cell.set(key, c);
+    }
+    const rows = [...new Set(E.map(e => e[0]))].sort((a, b) => D.volumes.findIndex(v => v.id === a) - D.volumes.findIndex(v => v.id === b));
+    const cols = [...new Set(E.map(e => e[1]))].sort((a, b) => (a === "extern") - (b === "extern") ||
+      D.volumes.findIndex(v => v.id === a) - D.volumes.findIndex(v => v.id === b));
+    const S = 13, L = 110, T = 110;
+    lm.innerHTML = "";
+    const svg = d3.select(lm).append("svg").attr("width", L + cols.length * S + 10).attr("height", T + rows.length * S + 10);
+    const max = d3.max([...cell.values()], c => c.n) || 1;
+    const col = d3.scaleSequentialLog([1, max], d3.interpolateReds);
+    svg.append("g").selectAll("text").data(rows).join("text").attr("x", L - 4).attr("y", (d, i) => T + i * S + S - 3)
+      .attr("text-anchor", "end").attr("class", "mlab").text(d => vlab[d] || d);
+    svg.append("g").selectAll("text").data(cols).join("text").attr("class", "mlab")
+      .attr("transform", (d, i) => `translate(${L + i * S + S - 3},${T - 4}) rotate(-60)`).text(d => vlab[d] || d);
+    const ri = new Map(rows.map((r, i) => [r, i])), ci = new Map(cols.map((c, i) => [c, i]));
+    svg.append("g").selectAll("rect").data([...cell.values()]).join("rect")
+      .attr("x", c => L + ci.get(c.t) * S).attr("y", c => T + ri.get(c.s) * S).attr("width", S - 1).attr("height", S - 1)
+      .attr("fill", c => col(Math.max(1, c.n))).attr("stroke", c => c.b ? "#111" : (c.s === c.t ? "#888" : "none"))
+      .attr("stroke-width", c => c.b ? 1.5 : .5).style("cursor", "pointer")
+      .on("click", (ev, c) => detail(c.s, c.t))
+      .append("title").text(c => `${vlab[c.s] || c.s} → ${vlab[c.t] || c.t}: ${c.n} Verweise${c.b ? `, ${c.b} gebrochen` : ""}`);
+  };
+  const detail = (s, t) => getJSON(`links/${s}.json`).then(R => {
+    const f = sel();
+    const rows = (R || []).filter(r => r[3] === t && (!f.l || r[6] === f.l) && (!f.b || !r[7]));
+    $("#lsel-h").textContent = `Verweise ${vlab[s] || s} → ${vlab[t] || t}`;
+    $("#lsel").textContent = `${rows.length} Verweise`;
+    $("#ldetail").tBodies[0].innerHTML = rows.map(r =>
+      `<tr><td><a href="../v/${s}/d/${slug(r[1])}.html">${esc(vlab[s] || s)} ${esc(r[0])}</a></td><td>${esc(r[2])}</td>` +
+      `<td><a href="${esc(r[5])}">${esc(r[4] || r[5])}</a></td><td>${LEV[r[6]] || esc(r[6])}</td>` +
+      `<td>${r[7] ? "ok" : "<b class=bad>gebrochen</b>"}</td></tr>`).join("");
+  });
+  ["lkind", "llevel", "lbroken"].forEach(id => $("#" + id).addEventListener("change", draw));
+  draw();
+  // per volume
+  const per = {};
+  for (const [s, t, k, lv, n, b] of D.edges) {
+    const p = per[s] || (per[s] = {n: 0, same: 0, other: 0, ext: 0, st: 0, b: 0});
+    p.n += n; p.b += b;
+    if (k === "extern") p.ext += n; else if (s === t) p.same += n; else p.other += n;
+    if (lv === "stueck") p.st += n;
+  }
+  $("#lvols").tBodies[0].innerHTML = Object.entries(per).sort((a, b) => b[1].n - a[1].n).map(([v, p]) =>
+    `<tr><td><a href="../v/${v}/index.html">${esc(vlab[v] || v)}</a></td><td>${p.n}</td><td>${p.same}</td><td>${p.other}</td>` +
+    `<td>${p.ext}</td><td>${Math.round(100 * p.st / Math.max(1, p.n - p.ext))} %</td><td>${p.b || ""}</td></tr>`).join("");
+  getJSON("links_history.json").then(H => {
+    if (!H) return;
+    $("#lhist").tBodies[0].innerHTML = "<tr><th>Datum</th><th>Code</th><th>Bände</th><th>im Band</th><th>andere Bände</th><th>extern</th><th>aufs Stück</th><th>gebrochen</th></tr>" +
+      H.slice().reverse().map(h => `<tr><td>${esc(h.date)}</td><td><code>${esc(h.commit)}</code></td><td>${h.volumes ?? ""}</td>` +
+        `<td>${h["ssrq:im Band"] ?? 0}</td><td>${h["ssrq:anderer Band"] ?? 0}</td><td>${h["extern:extern"] ?? 0}</td>` +
+        `<td>${h["Ebene stueck"] ?? 0}</td><td>${h["gebrochen"] ?? 0}</td></tr>`).join("");
+  });
+});
