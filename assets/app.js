@@ -238,6 +238,21 @@ if (sk && window.d3 && d3.sankey) getJSON("sankey.json").then(flows => {
   node.append("text").attr("x", d => d.x1 + 6).attr("y", d => (d.y0 + d.y1) / 2).attr("dy", "0.35em").text(d => `${d.name} (${d.value})`);
 });
 
+// glossary: the definition gpt-oss wrote from the volumes' glossaries and the linked dictionaries (#5); the source tags
+// [BAND] [DRW] … become labels linking the dictionary article
+const DEFTAG = {idiotikon: "ID", drw: "DRW", fwb: "FWB", lexer: "LEXER", dwb: "DWB", dwb2: "DWB2"};
+const definitionPanel = F => {
+  const url = {}; F.s.forEach(([src, , u]) => { url[DEFTAG[src]] = u; });
+  const tags = t => esc(t).replace(/\[([A-Z0-9]+)\]/g, (m, k) => k === "BAND" ? `<span class="dtag">Band</span>`
+    : url[k] ? `<a class="dtag" href="${esc(url[k])}" target="_blank">${k}</a>` : `<span class="dtag">${k}</span>`);
+  return `<div class="panel definition"><h2>Bedeutung</h2><p>${tags(F.t)}</p>
+    ${F.x.length ? `<p class="meta">Abweichend:</p><ul>${F.x.map(x => `<li>${tags(x)}</li>`).join("")}</ul>` : ""}
+    <p class="meta">Maschinell zusammengefasst (gpt-oss) aus den Glossaren der Bände und ${F.s.filter(s => !s[3]).map(([, c, u]) =>
+      u ? `<a href="${esc(u)}" target="_blank">${esc(c)}</a>` : esc(c)).join(", ") || "—"}${F.s.some(s => s[3])
+      ? `; anderes Wort und nicht verwendet: ${F.s.filter(s => s[3]).map(([, c, u]) => u ? `<a href="${esc(u)}" target="_blank">${esc(c)}</a>` : esc(c)).join(", ")}` : ""}.
+    Prüfen Sie die Angaben an den Wörterbuchartikeln.</p></div>`;
+};
+
 // ---------------------------------------------------------------- register entry page (r/eintrag.html#<id>)
 // after the keyword pages of the St. Galler Missiven: Sankey «Begleiter über die Zeit», «Über die Zeit», «Oft zusammen mit»,
 // plus a faceted search over the pieces (canton, volume, date, keyword); every view follows the filters
@@ -260,7 +275,9 @@ if (entryBox) {
       ${E.S && E.S.length ? `<details class="children" open><summary>${E.S.length} zugeordnete Einträge (Stücke zusammengefasst)</summary><ul>${E.S.map(([i, l, rel, q]) => `<li><span class="rel ${rel}">${esc(REL[rel] || rel)}</span> <a href="#${esc(i)}">${esc(l)}</a>${q && rel !== "same" ? " — " + esc(q) : ""}</li>`).join("")}</ul></details>` : ""}
       <p class="auth">${auth.join(" ")}</p><p class="links">
       ${E.m ? `<a href="../k/o/${esc(cid)}.html">Ortskarte</a>` : ""}${E.e ? `<a href="../e/x/${esc(cid)}.html">in den neuen Bänden (${E.e})</a>` : ""}
-      <a href="${E.t}/${E.L}.html#${esc(cid)}">im Register ${TYPE[E.t]}, ${E.L}</a> <a href="../s/suche.html?q=${encodeURIComponent(E.l)}">in der Suche</a></p></div>`;
+      ${E.t === "glossary" ? `<a href="woerterbuecher.html?d=*&q=${encodeURIComponent(E.l)}">Wörterbücher ↔ Glossar</a>` : ""}
+      <a href="${E.t}/${E.L}.html#${esc(cid)}">im Register ${TYPE[E.t]}, ${E.L}</a> <a href="../s/suche.html?q=${encodeURIComponent(E.l)}">in der Suche</a></p></div>`
+      + (E.F ? definitionPanel(E.F) : "");
     // the pieces citing it, with the entries they cite
     const docs = [];
     for (const [vol, ids] of Object.entries(E.D)) {
@@ -480,3 +497,47 @@ if (lm && window.d3) getJSON("links.json").then(D => {
         `<td>${h["Ebene stueck"] ?? 0}</td><td>${h["gebrochen"] ?? 0}</td></tr>`).join("");
   });
 });
+
+// ---------------------------------------------------------------- dictionaries <-> glossary (r/woerterbuecher.html)
+const wtab = $("#wtab");
+if (wtab) {
+  const sel = $("#wdict"), q = $("#wq"), sure = $("#wsure");
+  const prm = new URLSearchParams(location.search);
+  if (prm.get("d")) sel.value = prm.get("d");
+  if (prm.get("q")) q.value = prm.get("q");
+  const NAME = Object.fromEntries([...sel.options].map(o => [o.value, o.textContent.replace(/ \(\d+\)$/, "")]));
+  const fold = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[|*\-·.]/g, "").replace(/ſ/g, "s");
+  const bare = u => String(u || "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+  let letter = "";
+  const load = async () => {
+    const srcs = sel.value === "*" ? [...sel.options].map(o => o.value).filter(v => v !== "*") : [sel.value];
+    const parts = await Promise.all(srcs.map(s => getJSON(`data/dict-${s}.json`).then(d => (d || []).map(r => [s, ...r]))));
+    return parts.flat();
+  };
+  const draw = async () => {
+    const all = await load(), raw = q.value.trim(), t = fold(raw), url = /^https?:|\.(ch|de)\//.test(raw) ? bare(raw) : "";
+    let hits = all.filter(([, id, lem, , u, , ents]) => {
+      if (sure.checked && !ents.some(x => x[3])) return false;
+      if (url) return bare(u) === url || bare(u).startsWith(url) || url.startsWith(bare(u));
+      if (!t) return !letter || fold(lem).startsWith(letter);
+      return fold(lem).includes(t) || String(id).toLowerCase() === raw.toLowerCase() || ents.some(x => fold(x[1]).includes(t));
+    });
+    if (t && !url) {  // exact matches first
+      const rank = r => (fold(r[2]) === t || r[6].some(x => fold(x[1]) === t)) ? 0 : 1;
+      hits = hits.map((r, i) => [rank(r), i, r]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]);
+    }
+    $("#wcount").textContent = `${hits.length} Artikel` + (hits.length > 400 ? " — die ersten 400 gezeigt; Suche oder Buchstabe grenzt ein" : "");
+    wtab.querySelector("tbody").innerHTML = hits.slice(0, 400).map(([s, id, lem, gram, u, cite, ents]) =>
+      `<tr><td>${u ? `<a href="${esc(u)}" target="_blank"><b>${esc(lem)}</b> ↗</a>` : `<b>${esc(lem)}</b>`} ${gram ? `<i>${esc(gram)}</i>` : ""}
+        <br><span class="meta">${esc(sel.value === "*" ? NAME[s] + " · " : "")}${esc(cite || id)}</span></td>
+      <td>${ents.filter(x => !sure.checked || x[3]).map(([cid, lab, n, ok]) =>
+        `<a href="eintrag.html#${esc(cid)}">${esc(lab)}</a>${ok ? "" : " ?"} <span class="meta">(${n} Stücke)</span>`).join("<br>")}</td></tr>`).join("");
+    const ls = [...new Set(all.map(r => fold(r[2])[0]).filter(c => c && /[a-z]/.test(c)))].sort();
+    $("#wletters").innerHTML = [["", "alle"], ...ls.map(c => [c, c.toUpperCase()])].map(([c, l]) =>
+      `<a href="#" data-l="${c}"${c === letter && !t ? ' class="on"' : ""}>${l}</a>`).join(" ");
+  };
+  $("#wletters").addEventListener("click", ev => { const a = ev.target.closest("a[data-l]"); if (!a) return; ev.preventDefault(); letter = a.dataset.l; q.value = ""; draw(); });
+  let tm; q.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(draw, 200); });
+  sel.addEventListener("change", draw); sure.addEventListener("change", draw);
+  draw();
+}
