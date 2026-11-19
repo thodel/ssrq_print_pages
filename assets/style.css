@@ -158,3 +158,23 @@ b.bad { color: var(--accent-dk); }
   background: rgba(127, 127, 127, .15); color: var(--muted); text-decoration: none; vertical-align: 1px; }
 .definition a.dtag { color: var(--cat-pers-dk); }
 .definition ul { margin: 4px 0 8px 18px; }
+/* Hauptstück und Teile (139 · 139a, 139b): ein Block im Stückverzeichnis */
+table.pieces tr.fam-head td { border-top: 2px solid var(--border); }
+table.pieces tr.fam-head td.no { font-weight: 600; }
+table.pieces tr.part td { border-top: 1px dotted var(--border); font-size: 14px; padding-top: 4px; padding-bottom: 4px; }
+table.pieces tr.part td.no { padding-left: 22px; color: var(--muted); white-space: nowrap; }
+table.pieces tr.part td:nth-child(3) { border-left: 3px solid var(--cat-source); padding-left: 10px; }
+table.pieces tr.part td:nth-child(2) { color: var(--muted); }
+/* Seite eines Teils: das Hauptstück als Zusammenhang */
+.part-of { background: var(--panel); border: 1px solid var(--border); border-left: 6px solid var(--cat-source); padding: 10px 18px; margin: 14px 0 18px; }
+.part-of .kicker { margin: 0 0 2px; }
+.part-of .ptitle { font-family: var(--font-serif); margin: 0 0 6px; }
+.part-of .sibs { font: .92rem var(--font-nav); margin: 6px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.part-of .sibs b { font-weight: 600; }
+/* Seite eines Hauptstücks: die Teile mit Textanfang */
+ol.parts { list-style: none; padding: 0; margin: 0; background: var(--panel); border: 1px solid var(--border); border-left: 6px solid var(--cat-source); }
+ol.parts li { padding: 9px 16px; border-top: 1px solid var(--border); }
+ol.parts li:first-child { border-top: 0; }
+ol.parts .no { font-weight: 600; margin-right: 4px; }
+ol.parts .meta { margin-left: 6px; }
+ol.parts .inc { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
