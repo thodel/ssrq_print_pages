@@ -240,3 +240,19 @@ ul.offices li { padding: 8px 0; }
 .panel.statements dd { margin: 0; } .panel.statements ul { list-style: none; margin: 0; padding: 0; }
 .panel.statements .where { color: var(--cat-place-dk, #175b5b); }
 @media (max-width: 600px) { .panel.statements dl { grid-template-columns: 1fr; } }
+.panel.topics ul { list-style: none; padding: 0; margin: 0 0 8px; } .panel.topics li { padding: 2px 0; border-top: 1px solid var(--border); }
+/* search facets (#16) */
+#facets { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 14px; margin: 10px 0 14px; }
+#facets .ff { border: 1px solid var(--border); background: var(--panel); padding: 6px 10px 8px; margin: 0; min-width: 0; }
+#facets .ff.wide { grid-column: span 2; }
+#facets legend { font: 600 .85rem var(--font-nav); color: var(--muted); padding: 0 4px; }
+#facets legend a.clr { font-weight: 400; margin-left: 6px; }
+#facets .ffl { max-height: 170px; overflow: auto; font-size: 14px; }
+#facets .ffl label, #facets .ff > label { display: block; line-height: 1.5; }
+#facets .ffq { width: 100%; box-sizing: border-box; margin: 2px 0 4px; }
+#facets #sh-hist { width: 100%; height: 44px; display: block; }
+#facets #sh-hist rect { fill: var(--border); } #facets #sh-hist rect.on { fill: var(--cat-source); }
+#scount a { white-space: nowrap; }
+.pages { font-family: var(--font-nav); margin: 12px 0; } .pages a { margin: 0 8px; }
+@media (max-width: 600px) { #facets .ff.wide { grid-column: auto; } }
+section.doclinks ul { list-style: none; padding: 0; margin: 0; } section.doclinks li { padding: 3px 0; border-top: 1px solid var(--border); }

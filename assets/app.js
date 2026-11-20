@@ -116,66 +116,188 @@ const norm = s => String(s || "").replace(/ſ/g, "s").replace(/ß/g, "ss").norma
 const TYPE = {persons: "Personen", families: "Familien", places: "Orte", orgs: "Organisationen", subjects: "Sachen", glossary: "Glossar"};
 const getJSON = (() => { const c = {}; return u => c[u] || (c[u] = fetch(u).then(r => r.ok ? r.json() : null)); })();
 
-// ---------------------------------------------------------------- faceted search (s/suche.html)
+// ---------------------------------------------------------------- faceted search (s/suche.html, #16)
+// facets with counts and several values each (s/search/f/<facet>.json: value -> record numbers), time per citation
+// (f/dec.json: decade -> records and their citing pieces), sorting (f/n.json, f/y.json), pages of 50; the records
+// themselves are loaded only for the page shown. The whole state is in the URL; old links (typ, kanton, band,
+// normdaten, karte, jh) keep working.
 const sform = $("#sform");
 if (sform) (async () => {
-  const base = "search/", meta = await getJSON(base + "meta.json");
+  const base = "search/", meta = await getJSON(base + "meta.json"), N = meta.n;
   const params = new URLSearchParams(location.search + "&" + location.hash.slice(1));
-  $("#sq").value = params.get("q") || "";
-  const st = {typ: params.get("typ") || "", kanton: params.get("kanton") || "", band: params.get("band") || "",
-              jh: params.get("jh") || "", norm: params.get("normdaten") || "", karte: params.get("karte") === "1", neu: false};
-  const opt = (v, t, sel) => `<option value="${esc(v)}"${v === sel ? " selected" : ""}>${esc(t)}</option>`;
-  $("#facets").innerHTML = `
-    <fieldset><legend>Typ</legend><select id="f-typ">${opt("", "alle")}${Object.entries(TYPE).map(([k, v]) => opt(k, v, st.typ)).join("")}</select></fieldset>
-    <fieldset><legend>Kanton</legend><select id="f-kanton">${opt("", "alle")}${Object.entries(meta.cantons).map(([k, v]) => opt(k, v, st.kanton)).join("")}</select></fieldset>
-    <fieldset><legend>Band</legend><select id="f-band">${opt("", "alle")}${meta.volumes.map(v => opt(v, volLabel(v), st.band)).join("")}</select></fieldset>
-    <fieldset class="wide"><legend>Zeitraum der Stücke</legend><div class="ctl wide" id="f-years"></div></fieldset>
-    <fieldset><legend>Normdaten</legend><select id="f-norm">${opt("", "alle")}${[["hls", "HLS verknüpft"], ["ssrq", "SSRQ verknüpft"], ["kf", "Königsfelden verknüpft"], ["idiotikon", "Idiotikon verknüpft"], ["lexer", "Lexer verknüpft"], ["dwb", "Grimm (DWB) verknüpft"], ["dwb2", "Grimm (DWB2) verknüpft"], ["drw", "Rechtswörterbuch (DRW) verknüpft"], ["fwb", "Frühnhd. Wörterbuch (FWB) verknüpft"], ["findeb", "Findebuch verknüpft"], ["bmz", "BMZ verknüpft"], ["amb", "mehrdeutig"], ["none", "ohne Normdaten"]].map(([k, v]) => opt(k, v, st.norm)).join("")}</select></fieldset>
-    <fieldset><legend>Weitere</legend><label><input type="checkbox" id="f-karte"${st.karte ? " checked" : ""}> auf der Karte</label>
-      <label><input type="checkbox" id="f-neu"> in neuen Bänden</label></fieldset>`;
-  const chunks = {};
-  const rec = async i => { const k = Math.floor(i / meta.chunk); chunks[k] = chunks[k] || await getJSON(`${base}rec-${k}.json`); return chunks[k][i % meta.chunk]; };
+  const list = k => (params.get(k) || "").split(",").filter(Boolean);
+  const FAC = [["t", "Typ", "typ"], ["k", "Kanton", "kanton"], ["b", "Band", "band"], ["a", "Normdaten", "normdaten"],
+               ["p", "Ortsart", "ort"], ["o", "Amt, Beruf", "amt"]];
+  const SRC = {hls: "HLS", ssrq: "SSRQ-Personen", kf: "Königsfelden", idiotikon: "Idiotikon", lexer: "Lexer", dwb: "Grimm (DWB)",
+    dwb2: "Grimm (DWB2)", drw: "Rechtswörterbuch (DRW)", fwb: "Frühnhd. Wörterbuch (FWB)", findeb: "Findebuch", bmz: "BMZ",
+    loci: "SSRQ-Orte", wikidata: "Wikidata", amb: "mehrdeutig", none: "ohne Normdaten"};
+  const label = (f, v) => f === "t" ? (TYPE[v] || v) : f === "k" ? (meta.cantons[v] || v) : f === "b" ? volLabel(v)
+    : f === "a" ? (SRC[v] || v.toUpperCase()) : f === "o" ? v.replace(/^./, c => c.toUpperCase()) : v;
+  const S = {q: params.get("q") || "", sel: {}, y0: null, y1: null, undated: params.get("ohne") !== "0",
+             sort: params.get("sort") || "rel", page: +(params.get("seite") || 1), karte: params.get("karte") === "1",
+             neu: params.get("neu") === "1"};
+  FAC.forEach(([f, , p]) => { S.sel[f] = new Set(list(p)); });
+  if (params.get("von")) { S.y0 = +params.get("von"); S.y1 = +(params.get("bis") || 1909); }
+  else if (params.get("jh")) { S.y0 = (+params.get("jh") - 1) * 100; S.y1 = S.y0 + 99; }  // old links: century
+  $("#sq").value = S.q;
+  $("#facets").innerHTML = '<p class="meta">Facetten werden geladen …</p>';
+
+  // ---- data: facet lists as Uint32Arrays, decade lists, sort arrays
+  const decode = d => { const a = new Uint32Array(d.length); let x = 0; d.forEach((v, k) => { x += v; a[k] = x; }); return a; };
+  const F = {};
+  const [facs, decRaw, nArr, yArr] = await Promise.all([
+    Promise.all([...FAC.map(([f]) => f), "m", "e"].map(f => getJSON(`${base}f/${f}.json`).then(o => [f, o || {}]))),
+    getJSON(base + "f/dec.json"), getJSON(base + "f/n.json"), getJSON(base + "f/y.json")]);
+  facs.forEach(([f, o]) => { F[f] = {}; Object.entries(o).forEach(([v, d]) => { F[f][v] = decode(d); }); });
+  const DEC = Object.entries(decRaw || {}).map(([d, [ids, cnt]]) => [+d, decode(ids), cnt]);
+  const dated = new Uint8Array(N); DEC.forEach(([, ids]) => ids.forEach(i => { dated[i] = 1; }));
+  const nOf = nArr || [], yOf = yArr || [];
+
+  // ---- masks
+  const maskOf = (f) => {           // records passing facet f (null: no selection)
+    const vs = [...S.sel[f]];
+    if (!vs.length) return null;
+    const m = new Uint8Array(N);
+    vs.forEach(v => (F[f][v] || []).forEach(i => { m[i] = 1; }));
+    return m;
+  };
+  let inRangeCnt = null;            // citations in the chosen decades
+  const timeMask = () => {
+    if (S.y0 == null) { inRangeCnt = null; return null; }
+    inRangeCnt = new Uint16Array(N);
+    const d0 = Math.floor((S.y0 - 1000) / 10), d1 = Math.floor((S.y1 - 1000) / 10);
+    DEC.forEach(([d, ids, cnt]) => { if (d >= d0 && d <= d1) ids.forEach((i, k) => { inRangeCnt[i] += cnt[k]; }); });
+    const m = new Uint8Array(N);
+    for (let i = 0; i < N; i++) m[i] = inRangeCnt[i] > 0 || (S.undated && !dated[i]) ? 1 : 0;
+    return m;
+  };
   const ids = async w => {
     const ix = await getJSON(`${base}ix-${w.slice(0, 2).replace(/[^A-Za-z0-9._-]+/g, "_")}.json`) || {}, out = new Set();
-    for (const [word, list] of Object.entries(ix)) if (word.startsWith(w)) list.forEach(i => out.add(i));
+    for (const [word, l] of Object.entries(ix)) if (word.startsWith(w)) l.forEach(i => out.add(i));
     return out;
   };
-  const passes = r => {
-    const f = id => $(id).value;
-    if (f("#f-typ") && r.t !== f("#f-typ")) return false;
-    if (f("#f-kanton") && !r.k.includes(f("#f-kanton"))) return false;
-    if (f("#f-band") && !r.b.includes(f("#f-band"))) return false;
-    if (yst && yst.active && !(r.y && r.y.length && inRange(yst, r.y[0], r.y[1]))) return false;
-    const n = f("#f-norm"), a = r.a || {};
-    if (n === "amb" && !Object.values(a).includes("ambiguous")) return false;
-    if (n === "none" && Object.values(a).some(x => x === "match" || x === "ambiguous")) return false;
-    if (["hls", "ssrq", "kf", "idiotikon", "lexer", "dwb", "dwb2", "drw", "fwb", "findeb", "bmz"].includes(n) && a[n] !== "match") return false;
-    if ($("#f-karte").checked && !r.m) return false;
-    if ($("#f-neu").checked && !r.e) return false;
-    return true;
-  };
-  const run = async () => {
-    const words = norm($("#sq").value).split(" ").filter(w => w.length >= 2);
+  const wordMask = async () => {
+    const words = norm(S.q).split(" ").filter(w => w.length >= 2);
+    if (!words.length) return [null, words];
     let cand = null;
     for (const w of words) { const s = await ids(w); cand = cand ? new Set([...cand].filter(i => s.has(i))) : s; }
-    if (!cand) cand = new Set([...Array(meta.n).keys()]);
-    const all = [];
-    for (const i of cand) { const r = await rec(i); if (r && passes(r)) all.push(r); }
-    all.sort((a, b) => b.n - a.n || a.l.localeCompare(b.l));
-    const byType = {}; all.forEach(r => byType[r.t] = (byType[r.t] || 0) + 1);
-    $("#scount").textContent = `${all.length} Einträge` + (all.length ? " — " + Object.entries(byType).map(([t, n]) => `${TYPE[t]} ${n}`).join(", ") : "") + (all.length > 300 ? " (die ersten 300 angezeigt)" : "");
+    const m = new Uint8Array(N); cand.forEach(i => { m[i] = 1; });
+    return [m, words];
+  };
+  const extra = () => {             // map / new volumes
+    const ms = [];
+    if (S.karte) { const m = new Uint8Array(N); (F.m["1"] || []).forEach(i => { m[i] = 1; }); ms.push(m); }
+    if (S.neu) { const m = new Uint8Array(N); (F.e["1"] || []).forEach(i => { m[i] = 1; }); ms.push(m); }
+    return ms;
+  };
+  const AND = (masks) => {
+    const out = new Uint8Array(N).fill(1);
+    masks.forEach(m => { if (m) for (let i = 0; i < N; i++) out[i] &= m[i]; });
+    return out;
+  };
+
+  // ---- facet panel
+  const drawFacets = (facetMasks, others) => {
+    const box = $("#facets");
+    const counts = f => {          // count each value against all other filters
+      const b = AND([...others, ...FAC.filter(([g]) => g !== f).map(([g]) => facetMasks[g])]);
+      return Object.entries(F[f]).map(([v, l]) => { let c = 0; l.forEach(i => { c += b[i]; }); return [v, c]; })
+        .filter(([v, c]) => c > 0 || S.sel[f].has(v)).sort((a, b2) => f === "b" ? a[0].localeCompare(b2[0]) : b2[1] - a[1]);
+    };
+    box.innerHTML = FAC.map(([f, title]) => {
+      const vals = counts(f);
+      if (!vals.length) return "";
+      const many = vals.length > 12;
+      return `<fieldset class="ff ${many ? "many" : ""}" data-f="${f}"><legend>${title}${S.sel[f].size ? ` <a href="#" class="clr" data-f="${f}">alle</a>` : ""}</legend>
+        ${many ? `<input class="ffq" placeholder="${title} filtern …">` : ""}<div class="ffl">${vals.map(([v, c]) =>
+          `<label><input type="checkbox" value="${esc(v)}"${S.sel[f].has(v) ? " checked" : ""}> ${esc(label(f, v))} <span class="meta">${c.toLocaleString("de-CH")}</span></label>`).join("")}</div></fieldset>`;
+    }).join("") + `<fieldset class="ff wide"><legend>Zeitraum der Belege</legend><svg id="sh-hist" viewBox="0 0 300 44" preserveAspectRatio="none"></svg>
+        <div class="ctl wide" id="f-years"></div><label><input type="checkbox" id="f-undated"${S.undated ? " checked" : ""}> auch Einträge ohne datierte Belege</label></fieldset>
+      <fieldset class="ff"><legend>Weitere</legend><label><input type="checkbox" id="f-karte"${S.karte ? " checked" : ""}> auf der Karte</label>
+        <label><input type="checkbox" id="f-neu"${S.neu ? " checked" : ""}> in den TEI-Bänden</label></fieldset>
+      <fieldset class="ff"><legend>Sortierung</legend><select id="f-sort">${[["rel", "meiste Belege"], ["range", "Belege im Zeitraum"],
+        ["alpha", "alphabetisch"], ["chrono", "chronologisch"]].map(([k, t]) => `<option value="${k}"${S.sort === k ? " selected" : ""}>${t}</option>`).join("")}</select></fieldset>`;
+    const st = dateSlider($("#f-years"), 1000, 1909, s2 => { S.y0 = s2.active ? s2.lo : null; S.y1 = s2.active ? s2.hi : null; S.page = 1; schedule(); }, "");
+    if (st && S.y0 != null) { const [a, b] = $("#f-years").querySelectorAll("input"); a.value = S.y0; b.value = S.y1; a.dispatchEvent(new Event("input")); }
+    box.querySelectorAll(".ffq").forEach(q => q.addEventListener("input", () => {
+      const t = fold(q.value); q.nextElementSibling.querySelectorAll("label").forEach(l => { l.hidden = t && !fold(l.textContent).includes(t); });
+    }));
+  };
+  $("#facets").addEventListener("change", ev => {
+    const t = ev.target, fs = t.closest("[data-f]");
+    if (fs && t.type === "checkbox") { const set = S.sel[fs.dataset.f]; t.checked ? set.add(t.value) : set.delete(t.value); }
+    else if (t.id === "f-undated") S.undated = t.checked;
+    else if (t.id === "f-karte") S.karte = t.checked;
+    else if (t.id === "f-neu") S.neu = t.checked;
+    else if (t.id === "f-sort") S.sort = t.value;
+    S.page = 1; run();
+  });
+  $("#facets").addEventListener("click", ev => {
+    const c = ev.target.closest(".clr"); if (!c) return;
+    ev.preventDefault(); S.sel[c.dataset.f].clear(); S.page = 1; run();
+  });
+
+  // ---- results
+  const chunks = {};
+  const rec = async i => { const k = Math.floor(i / meta.chunk); chunks[k] = chunks[k] || await getJSON(`${base}rec-${k}.json`); return chunks[k][i % meta.chunk]; };
+  const writeURL = () => {
+    const h = new URLSearchParams();
+    if (S.q) h.set("q", S.q);
+    FAC.forEach(([f, , p]) => { if (S.sel[f].size) h.set(p, [...S.sel[f]].join(",")); });
+    if (S.y0 != null) { h.set("von", S.y0); h.set("bis", S.y1); }
+    if (!S.undated) h.set("ohne", "0");
+    if (S.karte) h.set("karte", "1");
+    if (S.neu) h.set("neu", "1");
+    if (S.sort !== "rel") h.set("sort", S.sort);
+    if (S.page > 1) h.set("seite", S.page);
+    history.replaceState(null, "", "?" + h.toString());
+  };
+  let tmo = null;
+  const schedule = () => { clearTimeout(tmo); tmo = setTimeout(run, 200); };
+  async function run() {
+    writeURL();
+    const [wm, words] = await wordMask(), tm = timeMask(), others = [wm, tm, ...extra()];
+    const facetMasks = {}; FAC.forEach(([f]) => { facetMasks[f] = maskOf(f); });
+    const all = AND([...others, ...FAC.map(([f]) => facetMasks[f])]);
+    const hits = []; for (let i = 0; i < N; i++) if (all[i]) hits.push(i);
+    const alpha = S.sort === "alpha" ? await getJSON(base + "f/alpha.json") || [] : null;
+    const key = {rel: i => -(nOf[i] || 0), range: i => -(inRangeCnt ? inRangeCnt[i] : nOf[i] || 0),
+                 alpha: i => alpha[i] ?? i, chrono: i => yOf[i] || 99999}[S.sort] || (i => -(nOf[i] || 0));
+    hits.sort((a, b) => key(a) - key(b) || a - b);
+    drawFacets(facetMasks, others);
+    // histogram of the hits' citations per decade
+    const hist = new Array(91).fill(0), hm = all;
+    DEC.forEach(([d, l, cnt]) => { if (d < 91) l.forEach((i, k) => { if (hm[i]) hist[d] += cnt[k]; }); });
+    const mx = Math.max(1, ...hist), w = 300 / 91;
+    $("#sh-hist").innerHTML = hist.map((c, d) => `<rect x="${d * w}" y="${44 - 42 * c / mx}" width="${w * .85}" height="${42 * c / mx}"
+      class="${S.y0 == null || (1000 + 10 * d + 9 >= S.y0 && 1000 + 10 * d <= S.y1) ? "on" : ""}"><title>${1000 + 10 * d}er: ${c} Belege</title></rect>`).join("");
+    // counts by type, clickable
+    const byType = {};
+    Object.entries(F.t).forEach(([t, l]) => { let c = 0; l.forEach(i => { c += all[i]; }); if (c) byType[t] = c; });
+    const PER = 50, pages = Math.max(1, Math.ceil(hits.length / PER));
+    S.page = Math.min(S.page, pages);
+    $("#scount").innerHTML = `${hits.length.toLocaleString("de-CH")} Einträge` + (hits.length ? " — " + Object.entries(byType)
+      .map(([t, n]) => `<a href="#" data-typ="${t}">${TYPE[t]} ${n.toLocaleString("de-CH")}</a>`).join(", ") : "");
+    const shown = await Promise.all(hits.slice((S.page - 1) * PER, S.page * PER).map(rec));
     const hl = s => { let h = esc(s); words.forEach(w => { h = h.replace(new RegExp(`(^|[^\\p{L}])(${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "giu"), "$1<mark>$2</mark>"); }); return h; };
-    $("#shits").innerHTML = all.slice(0, 300).map(r => `<li class="${r.t}"><a href="../r/eintrag.html#${r.i}"><b>${hl(r.l)}</b></a>
+    $("#shits").innerHTML = shown.filter(Boolean).map(r => `<li class="${r.t}"><a href="../r/eintrag.html#${r.i}"><b>${hl(r.l)}</b></a>
       ${r.v.length ? `<span class="var">(${hl(r.v.join(", "))})</span>` : ""} ${r.d ? "— " + hl(r.d) : ""}
       ${r.g ? `<span class="partof">→ <a href="../r/eintrag.html#${esc(r.g[0])}">${esc(r.g[1])}</a> (${esc(REL[r.g[2]] || r.g[2])})</span>` : ""}${r.s ? ` <span class="ty">${r.s} zugeordnete Einträge</span>` : ""}
-      <div class="refs">${TYPE[r.t]} · ${r.n} Stücke · ${esc(r.b.map(volLabel).join(", "))}${r.m ? ` · <a href="../k/o/${r.i}.html">Ortskarte</a>` : ""}${r.e ? ` · ${r.e} in neuen Bänden` : ""}
+      <div class="refs">${TYPE[r.t]} · ${r.n} Stücke${r.y && r.y.length ? ` · ${r.y[0]}–${r.y[1]}` : ""} · ${esc(r.b.map(volLabel).join(", "))}${r.m ? ` · <a href="../k/o/${r.i}.html">Ortskarte</a>` : ""}${r.e ? ` · ${r.e} in neuen Bänden` : ""}
       ${Object.entries(r.a || {}).filter(([, v]) => v === "match").map(([k]) => `<span class="ty">${k.toUpperCase()} ✓</span>`).join(" ")}</div></li>`).join("");
-  };
-  let yst = null, tmo = null;
-  yst = dateSlider($("#f-years"), meta.years[0], meta.years[1], () => { clearTimeout(tmo); tmo = setTimeout(run, 250); }, "");
-  sform.addEventListener("submit", ev => { ev.preventDefault(); history.replaceState(null, "", "?q=" + encodeURIComponent($("#sq").value)); run(); });
-  $("#facets").addEventListener("change", run);
-  if ($("#sq").value || location.hash) run();
+    $("#spages").innerHTML = pages > 1 ? `${S.page > 1 ? `<a href="#" data-p="${S.page - 1}">‹ zurück</a>` : ""} Seite ${S.page} von ${pages}
+      ${S.page < pages ? `<a href="#" data-p="${S.page + 1}">weiter ›</a>` : ""}` : "";
+  }
+  $("#scount").addEventListener("click", ev => {
+    const a = ev.target.closest("[data-typ]"); if (!a) return;
+    ev.preventDefault(); S.sel.t = new Set([a.dataset.typ]); S.page = 1; run();
+  });
+  $("#spages").addEventListener("click", ev => {
+    const a = ev.target.closest("[data-p]"); if (!a) return;
+    ev.preventDefault(); S.page = +a.dataset.p; run(); sform.scrollIntoView({behavior: "smooth"});
+  });
+  sform.addEventListener("submit", ev => { ev.preventDefault(); S.q = $("#sq").value; S.page = 1; run(); });
+  run();
 })();
 
 // ---------------------------------------------------------------- map (k/karte.html) and place cards
@@ -259,6 +381,15 @@ const definitionPanel = F => {
 const entryBox = $("#entry");
 // persons (#8): what the registers say, structured — office, kinship, origin, rank, years, other names
 const KIND_DE = {role: "Amt, Beruf", kin: "Verwandtschaft", origin: "Herkunft, Bürgerrecht, Wohnort", rank: "Stand", attested: "Belegt", alias: "Andere Namen"};
+// places (#21): what the pieces say about the place (moved out of the description), and office holders named there
+const pieceHref = (vol, id) => `../v/${vol}/d/${slug(id.includes("-") ? id.slice(id.indexOf("-") + 1) : id)}.html`;
+function placeTopicsPanel(T, Of) {
+  return `<div class="panel topics">${T.length ? `<h2>In den Stücken</h2><ul>${T.map(([text, vol, docs]) =>
+      `<li>${esc(text)} <span class="meta">${esc(volLabel(vol))}</span>${docs.map(d => ` <a href="${pieceHref(vol, d)}">Nr. ${esc(d.slice(d.indexOf("-") + 1))}</a>`).join("")}</li>`).join("")}</ul>
+    <p class="meta">Aus der Beschreibung des Ortseintrags im Register; verlinkt mit dem Stück an der angegebenen Stelle.</p>` : ""}
+    ${Of.length ? `<h2>Personen im Ortseintrag</h2><ul>${Of.map(([role, name, vol]) => `<li>${esc(role)}: <a href="../s/suche.html?q=${encodeURIComponent(name)}">${esc(name)}</a> <span class="meta">${esc(volLabel(vol))}</span></li>`).join("")}</ul>` : ""}</div>`;
+}
+const XSRC = {kf: "Königsfelden", sg: "St. Galler Missiven", bullinger: "Bullinger Digital", thun: "Thuner Missiven"};
 function statementsPanel(R) {
   const by = {};
   R.forEach(r => (by[r[0]] = by[r[0]] || []).push(r));
@@ -292,7 +423,11 @@ if (entryBox) {
       ${E.m ? `<a href="../k/o/${esc(cid)}.html">Ortskarte</a>` : ""}${E.e ? `<a href="../e/x/${esc(cid)}.html">in den neuen Bänden (${E.e})</a>` : ""}
       ${E.t === "glossary" ? `<a href="woerterbuecher.html?d=*&q=${encodeURIComponent(E.l)}">Wörterbücher ↔ Glossar</a>` : ""}
       <a href="${E.t}/${E.L}.html#${esc(cid)}">im Register ${TYPE[E.t]}, ${E.L}</a> <a href="../s/suche.html?q=${encodeURIComponent(E.l)}">in der Suche</a></p></div>`
+      + (E.X ? `<div class="panel xlinks"><h2>In anderen Quellen</h2><ul>${E.X.map(([src, name, url, why]) =>
+          `<li><b>${esc(XSRC[src] || src)}</b>: ${url ? `<a href="${esc(url)}" target="_blank">${esc(name)} ↗</a>` : esc(name)} <span class="meta">${esc(why)}</span></li>`).join("")}</ul>
+          <p class="meta">Dieselbe Person über gemeinsame Kennungen (SSRQ-Personenregister, Metagrid); nicht aus Namensähnlichkeit erschlossen.</p></div>` : "")
       + (E.R ? statementsPanel(E.R) : "")
+      + (E.T || E.Of ? placeTopicsPanel(E.T || [], E.Of || []) : "")
       + (E.B ? `<div class="panel bio"><h2>Kurzbiografie</h2><p>${esc(E.B.t).replace(/\[([^\]]+)\]/g, '<span class="cite">[$1]</span>')}</p>
           ${E.B.u.length ? `<p class="meta">Unsicher: ${E.B.u.map(esc).join(" ")}</p>` : ""}
           <p class="meta">Maschinell erstellt (${esc(E.B.m)}) aus den Angaben der Register und den Stücken, in denen die Person vorkommt; jeder Satz nennt seinen Beleg.</p></div>` : "")
