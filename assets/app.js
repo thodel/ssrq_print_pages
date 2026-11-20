@@ -257,6 +257,17 @@ const definitionPanel = F => {
 // after the keyword pages of the St. Galler Missiven: Sankey «Begleiter über die Zeit», «Über die Zeit», «Oft zusammen mit»,
 // plus a faceted search over the pieces (canton, volume, date, keyword); every view follows the filters
 const entryBox = $("#entry");
+// persons (#8): what the registers say, structured — office, kinship, origin, rank, years, other names
+const KIND_DE = {role: "Amt, Beruf", kin: "Verwandtschaft", origin: "Herkunft, Bürgerrecht, Wohnort", rank: "Stand", attested: "Belegt", alias: "Andere Namen"};
+function statementsPanel(R) {
+  const by = {};
+  R.forEach(r => (by[r[0]] = by[r[0]] || []).push(r));
+  const row = ([kind, value, where, tid, years, vol]) => `<li>${esc(value)}${where ? (kind === "kin"
+      ? ` ${tid ? `<a href="#${esc(tid)}">${esc(where)}</a>` : esc(where)}` : ` <span class="where">${esc(where)}</span>`) : ""}${years ? ` <span class="meta">${esc(years)}</span>` : ""} <span class="meta">${esc(volLabel(vol))}</span></li>`;
+  return `<div class="panel statements"><h2>Angaben aus den Registern</h2><dl>${Object.keys(KIND_DE).filter(k => by[k]).map(k =>
+    `<dt>${KIND_DE[k]}</dt><dd><ul>${by[k].map(row).join("")}</ul></dd>`).join("")}</dl>
+    <p class="meta">Aus den Beschreibungen der Registerzeilen und den Amtslisten zerlegt (maschinell); Verwandte verlinkt, wo der Eintrag eindeutig ist.</p></div>`;
+}
 if (entryBox) {
   const FILE = {person: "persons", family: "families", place: "places", org: "orgs", subject: "subjects", glossary: "glossary"};
   const shard = cid => { const m = cid.match(/^([a-z]+?)(\d+)$/); return m ? `data/${FILE[m[1]]}-${Math.floor(+m[2] / 1000)}.json` : null; };
@@ -271,12 +282,20 @@ if (entryBox) {
     const auth = E.a.map(([src, id, name, url]) => url ? `<a href="${esc(url)}" target="_blank">${src.toUpperCase()} ${esc(id)} ${esc(name)} ↗</a>` : `${src.toUpperCase()} ${esc(id)} ${esc(name)}`);
     entryBox.innerHTML = `<div class="panel doc-head entry-head"><p class="kicker">${TYPE[E.t]}</p><h1>${esc(E.l)}</h1>
       ${E.v.length ? `<p class="meta">Schreibweisen: ${esc(E.v.join(", "))}</p>` : ""}${E.d ? `<p>${esc(E.d)}</p>` : ""}
+      ${E.X ? `<p class="flags">${E.X.map(esc).join(" ")} <span class="meta">(maschinelle Prüfung)</span></p>` : ""}
+      ${E.P ? `<details class="dupes"><summary>Möglicherweise dieselbe Person (${E.P.length})</summary><ul>${E.P.map(([i, l, v, why]) => `<li><a href="#${esc(i)}">${esc(l)}</a> — <i>${esc(v)}</i>: ${esc(why.join("; "))}</li>`).join("")}</ul><p class="meta">Vorschläge aus dem Vergleich von Namen, Belegjahren, Ämtern und Normdaten; nicht zusammengeführt.</p></details>` : ""}
+      ${E.Ol && E.Ol.length ? `<p class="offices">Amtslisten: ${E.Ol.map(([amt, vol, n, id]) => `<a href="aemter.html#${esc(id)}">${esc(amt)}</a> <span class="meta">${esc(volLabel(vol))}, ${n} Personen</span>`).join(" · ")}</p>` : ""}
+      ${E.O && E.O.length ? `<p class="offices">Ämter: ${E.O.map(([amt, ort, vol, id]) => `<a href="aemter.html#${esc(id)}">${esc(amt)}${ort ? " (" + esc(ort) + ")" : ""}</a> <span class="meta">${esc(volLabel(vol))}</span>`).join(" · ")}</p>` : ""}
       ${E.G ? `<p class="partof">${esc((REL[E.G[2]] || E.G[2]).replace(/^./, c => c.toUpperCase()))} von <a href="#${esc(E.G[0])}"><b>${esc(E.G[1])}</b></a>${E.G[3] ? " — " + esc(E.G[3]) : ""}</p>` : ""}
       ${E.S && E.S.length ? `<details class="children" open><summary>${E.S.length} zugeordnete Einträge (Stücke zusammengefasst)</summary><ul>${E.S.map(([i, l, rel, q]) => `<li><span class="rel ${rel}">${esc(REL[rel] || rel)}</span> <a href="#${esc(i)}">${esc(l)}</a>${q && rel !== "same" ? " — " + esc(q) : ""}</li>`).join("")}</ul></details>` : ""}
       <p class="auth">${auth.join(" ")}</p><p class="links">
       ${E.m ? `<a href="../k/o/${esc(cid)}.html">Ortskarte</a>` : ""}${E.e ? `<a href="../e/x/${esc(cid)}.html">in den neuen Bänden (${E.e})</a>` : ""}
       ${E.t === "glossary" ? `<a href="woerterbuecher.html?d=*&q=${encodeURIComponent(E.l)}">Wörterbücher ↔ Glossar</a>` : ""}
       <a href="${E.t}/${E.L}.html#${esc(cid)}">im Register ${TYPE[E.t]}, ${E.L}</a> <a href="../s/suche.html?q=${encodeURIComponent(E.l)}">in der Suche</a></p></div>`
+      + (E.R ? statementsPanel(E.R) : "")
+      + (E.B ? `<div class="panel bio"><h2>Kurzbiografie</h2><p>${esc(E.B.t).replace(/\[([^\]]+)\]/g, '<span class="cite">[$1]</span>')}</p>
+          ${E.B.u.length ? `<p class="meta">Unsicher: ${E.B.u.map(esc).join(" ")}</p>` : ""}
+          <p class="meta">Maschinell erstellt (${esc(E.B.m)}) aus den Angaben der Register und den Stücken, in denen die Person vorkommt; jeder Satz nennt seinen Beleg.</p></div>` : "")
       + (E.F ? definitionPanel(E.F) : "");
     // the pieces citing it, with the entries they cite
     const docs = [];
@@ -540,4 +559,28 @@ if (wtab) {
   let tm; q.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(draw, 200); });
   sel.addEventListener("change", draw); sure.addEventListener("change", draw);
   draw();
+}
+
+// ---------------------------------------------------------------- «Bände»: all, printed or TEI volumes (#druck / #tei)
+const kinds = document.getElementById("kinds");
+if (kinds) {
+  const show = kind => {
+    document.querySelectorAll(".cantons .card").forEach(card => {
+      let n = 0;
+      card.querySelectorAll("li[data-kind]").forEach(li => { const on = !kind || li.dataset.kind === kind; li.hidden = !on; n += on; });
+      card.hidden = !n;
+    });
+  };
+  const fromHash = () => {
+    const k = ["druck", "tei"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "";
+    kinds.querySelector(`input[value="${k}"]`).checked = true;
+    show(k);
+  };
+  kinds.addEventListener("change", ev => {
+    const k = ev.target.value;
+    history.replaceState(null, "", k ? "#" + k : location.pathname + location.search);
+    show(k);
+  });
+  window.addEventListener("hashchange", fromHash);
+  fromHash();
 }
