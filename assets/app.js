@@ -99,7 +99,7 @@ if (dtab) fetch("documents.json").then(r => r.json()).then(rows => {
     const hit = rows.filter(r => (!c || r[2] === c) && (!q || fold(r[6]).includes(q)) && inRange(yst, r[4]));
     $("#dn").textContent = `${hit.length} Stücke${hit.length > 1000 ? " (erste 1000 angezeigt)" : ""}`;
     dtab.tBodies[0].innerHTML = hit.slice(0, 1000).map(r =>
-      `<tr><td><a href="../${r[7] === "e" ? "e" : "v"}/${esc(r[1])}/index.html">${esc(r[1])}</a></td><td class="no">${esc(r[3])}</td><td>${esc(r[5])}</td>
+      `<tr><td><a href="../${r[7] === "e" ? "e" : "v"}/${esc(r[1])}/index.html">${esc(volLabel(r[1]))}</a></td><td class="no">${esc(r[3])}</td><td>${esc(r[5])}</td>
        <td><a href="${r[7] === "e" ? `../e/${esc(r[1])}/d/${slug(r[0])}.html` : `../v/${esc(r[1])}/d/${slug(r[0].split("-").slice(1).join("-"))}.html`}">${esc(r[6])}</a>${r[7] === "e" ? ' <span class="pill tei">TEI</span>' : ""}</td></tr>`).join("");
   };
   yst = dateSlider($("#dyears"), Math.min(...ys), Math.max(...ys), draw);
@@ -407,12 +407,20 @@ if (entryBox) {
   const render = async () => {
     const cid = decodeURIComponent(location.hash.slice(1));
     const [E, meta] = await Promise.all([entryOf(cid), getJSON("../s/search/meta.json")]);
-    if (!E) { entryBox.innerHTML = `<p class="todo">Eintrag ${esc(cid)} nicht gefunden.</p>`; return; }
+    if (!E) {
+      const moved = await getJSON("data/moved.json");  // an id merged into another one by a rebuild
+      if (moved && moved[cid]) { location.replace("#" + encodeURIComponent(moved[cid])); return; }
+      entryBox.innerHTML = `<p class="todo">Eintrag ${esc(cid)} nicht gefunden.</p>`; return;
+    }
     const cantonOf = (meta && meta.volcanton) || {}, cantonName = (meta && meta.cantons) || {};
     document.title = `${E.l} · SSRQ Druckbände`;
     const auth = E.a.map(([src, id, name, url]) => url ? `<a href="${esc(url)}" target="_blank">${src.toUpperCase()} ${esc(id)} ${esc(name)} ↗</a>` : `${src.toUpperCase()} ${esc(id)} ${esc(name)}`);
     entryBox.innerHTML = `<div class="panel doc-head entry-head"><p class="kicker">${TYPE[E.t]}</p><h1>${esc(E.l)}</h1>
       ${E.v.length ? `<p class="meta">Schreibweisen: ${esc(E.v.join(", "))}</p>` : ""}${E.d ? `<p>${esc(E.d)}</p>` : ""}
+      ${E.V ? `<p class="xref">Verweis: siehe ${E.V.map(t => `<a href="../s/suche.html?q=${encodeURIComponent(t)}">${esc(t)}</a>`).join(", ")}</p>` : ""}
+      ${E.Pt ? `<p class="meta">Im Register auch unter: ${E.Pt.map(esc).join(", ")}</p>` : ""}
+      ${E.S ? `<p class="xref">Siehe auch: ${E.S.map(([i, l]) => `<a href="#${esc(i)}">${esc(l)}</a>`).join(", ")}</p>` : ""}
+      ${E.Fn ? `<p class="meta">Flurname${E.Fn[0].length ? " · Gde " + esc(E.Fn[0].join(", ")) : ""}${E.Fn[1] ? " · " + esc(E.Fn[1]) : ""}</p>` : ""}
       ${E.X ? `<p class="flags">${E.X.map(esc).join(" ")} <span class="meta">(maschinelle Prüfung)</span></p>` : ""}
       ${E.P ? `<details class="dupes"><summary>Möglicherweise dieselbe Person (${E.P.length})</summary><ul>${E.P.map(([i, l, v, why]) => `<li><a href="#${esc(i)}">${esc(l)}</a> — <i>${esc(v)}</i>: ${esc(why.join("; "))}</li>`).join("")}</ul><p class="meta">Vorschläge aus dem Vergleich von Namen, Belegjahren, Ämtern und Normdaten; nicht zusammengeführt.</p></details>` : ""}
       ${E.Ol && E.Ol.length ? `<p class="offices">Amtslisten: ${E.Ol.map(([amt, vol, n, id]) => `<a href="aemter.html#${esc(id)}">${esc(amt)}</a> <span class="meta">${esc(volLabel(vol))}, ${n} Personen</span>`).join(" · ")}</p>` : ""}
