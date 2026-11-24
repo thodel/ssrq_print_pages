@@ -727,3 +727,43 @@ if (kinds) {
   window.addEventListener("hashchange", fromHash);
   fromHash();
 }
+
+// related pieces (#40, epic #41): candidates with four normalised values, weighed in the browser
+(function () {
+  const box = document.querySelector("section.related[data-rel]");
+  if (!box) return;
+  const M = [["regest", "Regest"], ["text", "Quellentext"], ["terms", "Register"], ["titles", "Titel"]];
+  const TYP = {persons: "Personen", places: "Orte", families: "Familien", orgs: "Organisationen", subjects: "Sachen", glossary: "Glossar"};
+  const up = box.dataset.rel.replace(/s\/rel\/[^/]+$/, "");
+  let W = JSON.parse(box.dataset.w);
+  try { const s = JSON.parse(localStorage.getItem("relw") || "null"); if (s) W = Object.assign(W, s); } catch (e) { /* defaults */ }
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  getJSON(box.dataset.rel).then(data => {
+    const rows = data && data[box.dataset.piece];
+    if (!rows || !rows.length) return;
+    box.hidden = false;
+    box.innerHTML = `<h2>Verwandte Stücke</h2><div class="relw">${M.map(([k, l]) =>
+      `<label>${l} <input type="range" min="0" max="1" step="0.05" value="${W[k] ?? 0}" data-k="${k}"></label>`).join("")}
+      </div><ol class="rel"></ol><p class="meta">Maschinell: Einbettungen von Regest bzw. Titel und Quellentext (qwen3-embedding-4b),
+      gemeinsame Registereinträge, gemeinsame Wörter im Titel; je 0–1. Die Gewichte lassen sich verschieben (gilt für alle Stückseiten).
+      <a href="${up}s/aehnlichkeit.html#${encodeURIComponent(box.dataset.piece)}">Auf der Karte zeigen</a></p>`;
+    const ol = box.querySelector("ol.rel");
+    const why = (k, w) => k === "terms" ? Object.entries(w).map(([t, n]) => `${n} ${TYP[t] || t}`).join(", ")
+      : k === "titles" ? "«" + w.join(", ") + "»" : k === "text" && w ? `${w} ähnliche Abschnitte` : "";
+    function draw() {
+      const tot = M.reduce((a, [k]) => a + (+W[k] || 0), 0) || 1;
+      const scored = rows.map(r => [M.reduce((a, [k], i) => a + (+W[k] || 0) * r[5][i], 0) / tot, r])
+        .filter(x => x[0] > 0.05).sort((a, b) => b[0] - a[0]).slice(0, 10);
+      ol.innerHTML = scored.map(([s, [href, vol, no, date, title, vals, w]]) =>
+        `<li><a href="${up}${esc(href)}">${esc(vol)} Nr. ${esc(no)}</a> ${esc(title)} <span class="meta">${esc(date)}</span>
+        <span class="relwhy">${M.map(([k, l], i) => vals[i] ? `${l} ${vals[i].toFixed(2)}${w[k] && why(k, w[k]) ? " (" + esc(why(k, w[k])) + ")" : ""}` : "").filter(Boolean).join(" · ")}</span></li>`).join("")
+        || "<li class=todo>Keine verwandten Stücke mit diesen Gewichten.</li>";
+    }
+    box.querySelectorAll(".relw input").forEach(inp => inp.addEventListener("input", () => {
+      W[inp.dataset.k] = +inp.value;
+      try { localStorage.setItem("relw", JSON.stringify(W)); } catch (e) { /* not kept */ }
+      draw();
+    }));
+    draw();
+  });
+})();

@@ -257,3 +257,23 @@ ul.offices li { padding: 8px 0; }
 .pages { font-family: var(--font-nav); margin: 12px 0; } .pages a { margin: 0 8px; }
 @media (max-width: 600px) { #facets .ff.wide { grid-column: auto; } }
 section.doclinks ul { list-style: none; padding: 0; margin: 0; } section.doclinks li { padding: 3px 0; border-top: 1px solid var(--border); }
+section.related .relw { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; font-size: .85rem; margin: .2rem 0 .6rem; }
+section.related .relw input { width: 7rem; vertical-align: middle; }
+section.related ol.rel { padding-left: 1.4rem; margin: 0; }
+section.related ol.rel li { padding: 3px 0; border-top: 1px solid var(--border); }
+section.related .relwhy { display: block; font-size: .8rem; color: var(--muted, #666); }
+#simmap .smctl { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; align-items: center; font-size: .9rem; margin: .4rem 0; }
+#simmap .smstage { position: relative; border: 1px solid var(--border); background: #fff; }
+#simmap canvas { display: block; cursor: crosshair; }
+#simmap .smtip { position: absolute; pointer-events: none; background: rgba(255,255,255,.95); border: 1px solid var(--border);
+  padding: 4px 6px; font-size: .8rem; max-width: 22rem; box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+#simmap .smlegend { display: flex; flex-wrap: wrap; gap: .2rem .9rem; font-size: .8rem; margin: .5rem 0; }
+#simmap .smlegend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; margin-right: .3rem; vertical-align: -1px; }
+#simmap .smcount { color: var(--muted, #666); font-size: .85rem; }
+#simmap [hidden] { display: none !important; }
+.lead-box { background: #fff; border-left: 4px solid var(--accent, #c8102e); padding: .6rem 1rem; margin: .6rem 0 1.2rem; }
+article.meta-intro { max-width: 46rem; line-height: 1.55; }
+article.meta-intro h2 { margin-top: 1.6rem; }
+article.meta-intro sup.fn a { text-decoration: none; padding: 0 1px; }
+article.meta-intro ol.footnotes { font-size: .85rem; padding-left: 1.6rem; }
+article.meta-intro ol.footnotes li { margin: .2rem 0; }
