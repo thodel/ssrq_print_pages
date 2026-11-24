@@ -431,7 +431,7 @@ if (entryBox) {
       ${E.m ? `<a href="../k/o/${esc(cid)}.html">Ortskarte</a>` : ""}${E.e ? `<a href="../e/x/${esc(cid)}.html">in den neuen Bänden (${E.e})</a>` : ""}
       ${E.t === "glossary" ? `<a href="woerterbuecher.html?d=*&q=${encodeURIComponent(E.l)}">Wörterbücher ↔ Glossar</a>` : ""}
       <a href="${E.t}/${E.L}.html#${esc(cid)}">im Register ${TYPE[E.t]}, ${E.L}</a> <a href="../s/suche.html?q=${encodeURIComponent(E.l)}">in der Suche</a></p></div>`
-      + (E.X ? `<div class="panel xlinks"><h2>In anderen Quellen</h2><ul>${E.X.map(([src, name, url, why]) =>
+      + (E.Q ? `<div class="panel xlinks"><h2>In anderen Quellen</h2><ul>${E.Q.map(([src, name, url, why]) =>
           `<li><b>${esc(XSRC[src] || src)}</b>: ${url ? `<a href="${esc(url)}" target="_blank">${esc(name)} ↗</a>` : esc(name)} <span class="meta">${esc(why)}</span></li>`).join("")}</ul>
           <p class="meta">Dieselbe Person über gemeinsame Kennungen (SSRQ-Personenregister, Metagrid); nicht aus Namensähnlichkeit erschlossen.</p></div>` : "")
       + (E.R ? statementsPanel(E.R) : "")
