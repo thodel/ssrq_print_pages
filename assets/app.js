@@ -89,21 +89,48 @@ if (pager) fetch("pages.json").then(r => r.json()).then(data => {
   window.addEventListener("hashchange", show); show();
 });
 
-// super-Stückverzeichnis
+// super-Stückverzeichnis: filters (title, canton, group of the similarity map, years) and «ähnliche»: the related
+// pieces of one piece in place of the list (#40, #50)
 const dtab = $("#dtab");
-if (dtab) fetch("documents.json").then(r => r.json()).then(rows => {
+if (dtab) Promise.all([fetch("documents.json").then(r => r.json()), fetch("groups.json").then(r => r.ok ? r.json() : {}).catch(() => ({}))]).then(([rows, groups]) => {
   const ys = rows.map(r => r[4]).filter(Boolean);
-  let yst = null;
+  const byId = {}; rows.forEach(r => { byId[r[0]] = r; });
+  let yst = null, sim = null;  // sim: [piece row, [[row, score], …]]
+  const gc = {}; rows.forEach(r => { if (r[8] >= 0) gc[r[8]] = (gc[r[8]] || 0) + 1; });
+  $("#dg").insertAdjacentHTML("beforeend", Object.keys(gc).sort((a, b) => (groups[a] || "").localeCompare(groups[b] || ""))
+    .map(g => `<option value="${g}">${esc(groups[g] || g)} (${gc[g]})</option>`).join(""));
+  const href = r => r[7] === "e" ? `../e/${esc(r[1])}/d/${slug(r[0])}.html` : `../v/${esc(r[1])}/d/${slug(r[0].split("-").slice(1).join("-"))}.html`;
+  const tr = (r, score) => `<tr><td><a href="../${r[7] === "e" ? "e" : "v"}/${esc(r[1])}/index.html">${esc(volLabel(r[1]))}</a></td><td class="no">${esc(r[3])}</td><td>${esc(r[5])}</td>
+       <td><a href="${href(r)}">${esc(r[6])}</a>${r[7] === "e" ? ' <span class="pill tei">TEI</span>' : ""}${score != null ? ` <span class="meta">${score.toFixed(2)}</span>` : ""}</td>
+       <td><button type="button" class="linkish" data-sim="${esc(r[0])}" title="die verwandten Stücke dieses Stücks">ähnliche</button></td></tr>`;
   const draw = () => {
+    const g = $("#dg").value;
+    if (sim) {
+      const [p, hit] = sim;
+      $("#dsim").innerHTML = `Ähnlich wie <b>${esc(volLabel(p[1]))} Nr. ${esc(p[3])}</b> ${esc(p[6])} · <a href="#" id="dsimx">zurück zur Liste</a>`;
+      $("#dsimx").onclick = ev => { ev.preventDefault(); sim = null; draw(); };
+      $("#dn").textContent = `${hit.length} verwandte Stücke`;
+      dtab.tBodies[0].innerHTML = tr(p) + (hit.map(([r, s]) => tr(r, s)).join("") || '<tr><td colspan="5" class="todo">Keine verwandten Stücke.</td></tr>');
+      return;
+    }
+    $("#dsim").innerHTML = g ? `Themengruppe <b>${esc(groups[g] || g)}</b> · <a href="aehnlichkeit.html#g=${g}">auf der Karte zeigen</a>` : "";
     const q = fold($("#dq").value), c = $("#dc").value;
-    const hit = rows.filter(r => (!c || r[2] === c) && (!q || fold(r[6]).includes(q)) && inRange(yst, r[4]));
+    const hit = rows.filter(r => (!c || r[2] === c) && (!g || String(r[8]) === g) && (!q || fold(r[6]).includes(q)) && inRange(yst, r[4]));
     $("#dn").textContent = `${hit.length} Stücke${hit.length > 1000 ? " (erste 1000 angezeigt)" : ""}`;
-    dtab.tBodies[0].innerHTML = hit.slice(0, 1000).map(r =>
-      `<tr><td><a href="../${r[7] === "e" ? "e" : "v"}/${esc(r[1])}/index.html">${esc(volLabel(r[1]))}</a></td><td class="no">${esc(r[3])}</td><td>${esc(r[5])}</td>
-       <td><a href="${r[7] === "e" ? `../e/${esc(r[1])}/d/${slug(r[0])}.html` : `../v/${esc(r[1])}/d/${slug(r[0].split("-").slice(1).join("-"))}.html`}">${esc(r[6])}</a>${r[7] === "e" ? ' <span class="pill tei">TEI</span>' : ""}</td></tr>`).join("");
+    dtab.tBodies[0].innerHTML = hit.slice(0, 1000).map(r => tr(r)).join("");
   };
-  yst = dateSlider($("#dyears"), Math.min(...ys), Math.max(...ys), draw);
-  ["#dq", "#dc"].forEach(s => $(s).addEventListener("input", draw)); draw();
+  dtab.addEventListener("click", async ev => {
+    const b = ev.target.closest("[data-sim]");
+    if (!b) return;
+    const p = byId[b.dataset.sim];
+    const rel = (await relOf(p[1], await relWeights()))[p[0]] || [];
+    sim = [p, rel.filter(x => byId[x[1]] && x[2] > 0.05).sort((a, b) => b[2] - a[2]).slice(0, 15).map(x => [byId[x[1]], x[2]])];
+    draw(); $("#dsim").scrollIntoView({block: "nearest"});
+  });
+  yst = dateSlider($("#dyears"), Math.min(...ys), Math.max(...ys), () => { sim = null; draw(); });
+  ["#dq", "#dc", "#dg"].forEach(s => $(s).addEventListener("input", () => { sim = null; draw(); }));
+  const hg = location.hash.match(/^#g=(\d+)$/); if (hg) $("#dg").value = hg[1];
+  draw();
 });
 
 
@@ -115,6 +142,23 @@ const norm = s => String(s || "").replace(/ſ/g, "s").replace(/ß/g, "ss").norma
   .replace(/(ae|oe|ue)/g, m => m[0]).replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
 const TYPE = {persons: "Personen", families: "Familien", places: "Orte", orgs: "Organisationen", subjects: "Sachen", glossary: "Glossar"};
 const getJSON = (() => { const c = {}; return u => c[u] || (c[u] = fetch(u).then(r => r.ok ? r.json() : null)); })();
+// related pieces, compact (s/rel/k/<vol>.json, #40): the weights of the piece pages (stored by the reader, else the
+// defaults), and per piece its related pieces with one weighted score each
+const REL_M = ["regest", "text", "terms", "titles"];
+async function relWeights() {
+  let w = await getJSON(`${UP}s/rel/w.json`) || {regest: 1, text: 1, terms: 1, titles: 1};
+  try { const s = JSON.parse(localStorage.getItem("relw") || "null"); if (s) w = Object.assign({}, w, s); } catch (e) { /* defaults */ }
+  return w;
+}
+async function relOf(vol, w) {
+  const d = await getJSON(`${UP}s/rel/k/${vol}.json`);
+  if (!d || !d.l) return {};
+  const tot = REL_M.reduce((a, k) => a + (+w[k] || 0), 0) || 1;
+  const out = {};
+  for (const [p, ls] of Object.entries(d.l))
+    out[p] = ls.map(([vi, q, ...v]) => [d.v[vi], q, REL_M.reduce((a, k, i) => a + (+w[k] || 0) * v[i], 0) / 100 / tot]);
+  return out;
+}
 
 // ---------------------------------------------------------------- faceted search (s/suche.html, #16)
 // facets with counts and several values each (s/search/f/<facet>.json: value -> record numbers), time per citation
@@ -283,7 +327,7 @@ if (sform) (async () => {
     $("#shits").innerHTML = shown.filter(Boolean).map(r => `<li class="${r.t}"><a href="../r/eintrag.html#${r.i}"><b>${hl(r.l)}</b></a>
       ${r.v.length ? `<span class="var">(${hl(r.v.join(", "))})</span>` : ""} ${r.d ? "— " + hl(r.d) : ""}
       ${r.g ? `<span class="partof">→ <a href="../r/eintrag.html#${esc(r.g[0])}">${esc(r.g[1])}</a> (${esc(REL[r.g[2]] || r.g[2])})</span>` : ""}${r.s ? ` <span class="ty">${r.s} zugeordnete Einträge</span>` : ""}
-      <div class="refs">${TYPE[r.t]} · ${r.n} Stücke${r.y && r.y.length ? ` · ${r.y[0]}–${r.y[1]}` : ""} · ${esc(r.b.map(volLabel).join(", "))}${r.m ? ` · <a href="../k/o/${r.i}.html">Ortskarte</a>` : ""}${r.e ? ` · ${r.e} in neuen Bänden` : ""}
+      <div class="refs">${TYPE[r.t]} · ${r.n} Stücke${r.y && r.y.length ? ` · ${r.y[0]}–${r.y[1]}` : ""} · ${esc(r.b.map(volLabel).join(", "))}${r.m ? ` · <span class="pin" title="mit Koordinaten">⌖</span>` : ""}${r.e ? ` · ${r.e} in neuen Bänden` : ""}
       ${Object.entries(r.a || {}).filter(([, v]) => v === "match").map(([k]) => `<span class="ty">${k.toUpperCase()} ✓</span>`).join(" ")}</div></li>`).join("");
     $("#spages").innerHTML = pages > 1 ? `${S.page > 1 ? `<a href="#" data-p="${S.page - 1}">‹ zurück</a>` : ""} Seite ${S.page} von ${pages}
       ${S.page < pages ? `<a href="#" data-p="${S.page + 1}">weiter ›</a>` : ""}` : "";
@@ -308,7 +352,7 @@ if (bigmap && window.L) getJSON("places.json").then(pts => {
   const layer = L.featureGroup().addTo(map);
   const marks = pts.map(([id, lab, lat, lon, n, vols, conf, span]) => [span, L.circleMarker([lat, lon], {
       radius: 4 + Math.sqrt(n) * 1.6, color: "#175b5b", weight: 1, fillColor: "#64c8c8", fillOpacity: conf === "möglich" ? .35 : .75})
-    .bindPopup(`<b><a href="o/${id}.html">${esc(lab)}</a></b><br>${n} Stücke${span && span.length ? ` (${span[0]}–${span[1]})` : ""}<br>${esc(vols.map(volLabel).join(", "))}`)]);
+    .bindPopup(`<b><a href="../r/eintrag.html#${id}">${esc(lab)}</a></b><br>${n} Stücke${span && span.length ? ` (${span[0]}–${span[1]})` : ""}<br>${esc(vols.map(volLabel).join(", "))}`)]);
   marks.forEach(([, m]) => m.addTo(layer));
   // focus on the core: the middle 90 % of the points (a few register places lie far away, e.g. Ungarn)
   if (pts.length) {
@@ -399,6 +443,38 @@ function statementsPanel(R) {
     `<dt>${KIND_DE[k]}</dt><dd><ul>${by[k].map(row).join("")}</ul></dd>`).join("")}</dl>
     <p class="meta">Aus den Beschreibungen der Registerzeilen und den Amtslisten zerlegt (maschinell); Verwandte verlinkt, wo der Eintrag eindeutig ist.</p></div>`;
 }
+// the former place card (k/o/<id>.html): coordinates, identifiers and a small map on the register entry
+function placeCard([lat, lon, src, conf, hls, qid, kf]) {
+  const ids = [hls && `<a href="https://hls-dhs-dss.ch/de/articles/${esc(hls)}/" target="_blank">HLS ${esc(hls)} ↗</a>`,
+               qid && `<a href="https://www.wikidata.org/wiki/${esc(qid)}" target="_blank">Wikidata ${esc(qid)} ↗</a>`,
+               kf && `Königsfelden ${esc(kf)}`].filter(Boolean);
+  return `<div class="placebox"><dl><dt>Koordinaten</dt><dd>${lat.toFixed(5)}, ${lon.toFixed(5)}
+    <a href="https://www.openstreetmap.org/?mlat=${lat}&amp;mlon=${lon}#map=13/${lat}/${lon}" target="_blank">OSM ↗</a></dd>
+    <dt>Quelle</dt><dd>${esc(src)}${conf ? ` (${esc(conf)})` : ""}</dd>${ids.length ? `<dt>Kennungen</dt><dd>${ids.join(" · ")}</dd>` : ""}</dl>
+    <div class="minimap" data-lat="${lat}" data-lon="${lon}"></div></div>`;
+}
+function drawMinimaps(root) {
+  if (!window.L) return;
+  root.querySelectorAll(".minimap[data-lat]:not(.leaflet-container)").forEach(el => {
+    const ll = [+el.dataset.lat, +el.dataset.lon], m = L.map(el, {scrollWheelZoom: false}).setView(ll, 11);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 17, attribution: "© OpenStreetMap"}).addTo(m);
+    L.circleMarker(ll, {radius: 8, color: "#175b5b", fillColor: "#64c8c8", fillOpacity: .8}).addTo(m);
+  });
+}
+// the register list of the places: only those with coordinates (#k, the former list k/orte.html)
+const konly = $("#konly");
+if (konly) {
+  const ul = $("ul.reg"), letters = [...document.querySelectorAll(".letters a")];
+  const set = on => {
+    ul.classList.toggle("konly", on);
+    letters.forEach(a => a.href = a.href.split("#")[0] + (on ? "#k" : ""));
+    if (on && location.hash !== "#k") history.replaceState(null, "", "#k");
+    if (!on && location.hash === "#k") history.replaceState(null, "", location.pathname);
+  };
+  konly.checked = location.hash === "#k";
+  set(konly.checked);
+  konly.addEventListener("change", () => set(konly.checked));
+}
 if (entryBox) {
   const FILE = {person: "persons", family: "families", place: "places", org: "orgs", subject: "subjects", glossary: "glossary"};
   const shard = cid => { const m = cid.match(/^([a-z]+?)(\d+)$/); return m ? `data/${FILE[m[1]]}-${Math.floor(+m[2] / 1000)}.json` : null; };
@@ -427,8 +503,9 @@ if (entryBox) {
       ${E.O && E.O.length ? `<p class="offices">Ämter: ${E.O.map(([amt, ort, vol, id]) => `<a href="aemter.html#${esc(id)}">${esc(amt)}${ort ? " (" + esc(ort) + ")" : ""}</a> <span class="meta">${esc(volLabel(vol))}</span>`).join(" · ")}</p>` : ""}
       ${E.G ? `<p class="partof">${esc((REL[E.G[2]] || E.G[2]).replace(/^./, c => c.toUpperCase()))} von <a href="#${esc(E.G[0])}"><b>${esc(E.G[1])}</b></a>${E.G[3] ? " — " + esc(E.G[3]) : ""}</p>` : ""}
       ${E.S && E.S.length ? `<details class="children" open><summary>${E.S.length} zugeordnete Einträge (Stücke zusammengefasst)</summary><ul>${E.S.map(([i, l, rel, q]) => `<li><span class="rel ${rel}">${esc(REL[rel] || rel)}</span> <a href="#${esc(i)}">${esc(l)}</a>${q && rel !== "same" ? " — " + esc(q) : ""}</li>`).join("")}</ul></details>` : ""}
+      ${E.K ? placeCard(E.K) : ""}
       <p class="auth">${auth.join(" ")}</p><p class="links">
-      ${E.m ? `<a href="../k/o/${esc(cid)}.html">Ortskarte</a>` : ""}${E.e ? `<a href="../e/x/${esc(cid)}.html">in den neuen Bänden (${E.e})</a>` : ""}
+      ${E.m ? `<a href="../k/karte.html">Karte der Orte</a>` : ""}${E.e ? `<a href="../e/x/${esc(cid)}.html">in den neuen Bänden (${E.e})</a>` : ""}
       ${E.t === "glossary" ? `<a href="woerterbuecher.html?d=*&q=${encodeURIComponent(E.l)}">Wörterbücher ↔ Glossar</a>` : ""}
       <a href="${E.t}/${E.L}.html#${esc(cid)}">im Register ${TYPE[E.t]}, ${E.L}</a> <a href="../s/suche.html?q=${encodeURIComponent(E.l)}">in der Suche</a></p></div>`
       + (E.Q ? `<div class="panel xlinks"><h2>In anderen Quellen</h2><ul>${E.Q.map(([src, name, url, why]) =>
@@ -440,6 +517,7 @@ if (entryBox) {
           ${E.B.u.length ? `<p class="meta">Unsicher: ${E.B.u.map(esc).join(" ")}</p>` : ""}
           <p class="meta">Maschinell erstellt (${esc(E.B.m)}) aus den Angaben der Register und den Stücken, in denen die Person vorkommt; jeder Satz nennt seinen Beleg.</p></div>` : "")
       + (E.F ? definitionPanel(E.F) : "");
+    drawMinimaps(entryBox);
     // the pieces citing it, with the entries they cite
     const docs = [];
     for (const [vol, ids] of Object.entries(E.D)) {
@@ -537,7 +615,7 @@ if (entryBox) {
       } else $("#esankey-note").textContent = "Zu wenig gemeinsame, datierte Stücke für eine Darstellung.";
       drawList(base);
     };
-    const drawList = base => {
+    let drawList = base => {
       const shown = base.filter(d => !click || click.test(d));
       $("#edocs-h").textContent = `Stücke (${shown.length}${shown.length !== docs.length ? ` von ${docs.length}` : ""})`;
       $("#efilter").innerHTML = click ? `Auswahl: ${esc(click.label)} <a href="#${esc(cid)}" id="eclear">aufheben</a>` : "";
@@ -548,6 +626,31 @@ if (entryBox) {
         <td class="no"><a href="../${d.ed ? "e" : "v"}/${esc(d.vol)}/index.html">${esc(volLabel(d.vol))}</a> ${esc(d.no)}${d.ed ? ' <span class="pill tei">TEI</span>' : ""}</td>
         <td><a href="../${d.ed ? "e" : "v"}/${esc(d.vol)}/d/${esc(d.slug)}.html"><b>${hl(d.title)}</b></a>${d.reg ? `<br><span class="meta">${hl(d.reg)}</span>` : ""}</td></tr>`).join("");
     };
+    // «Auch verwandt» (#40): pieces close to many of the pieces shown that do not cite this entry; the related
+    // pieces of the volumes with most hits (at most 12 volumes)
+    const W = await relWeights(), relBy = {};
+    const vtop = Object.entries(E.D).sort((a, b) => b[1].length - a[1].length).slice(0, 12).map(x => x[0]);
+    await Promise.all(vtop.map(async v => Object.assign(relBy, await relOf(v, W))));
+    const drawRel = async shown => {
+      const box = $("#erel"); if (!box) return;
+      const mine = new Set(docs.map(d => d.id)), acc = {};
+      shown.forEach(d => (relBy[d.id] || []).forEach(([v, q, s]) => {
+        if (mine.has(q) || s < 0.2) return;
+        const a = acc[q] || (acc[q] = {v, s: 0, n: 0}); a.s += s; a.n += 1;
+      }));
+      const top = Object.entries(acc).sort((a, b) => b[1].s - a[1].s).slice(0, 12);
+      if (!top.length) { box.hidden = true; return; }
+      const info = {};
+      await Promise.all([...new Set(top.map(([, a]) => a.v))].map(async v => { info[v] = await getJSON(`../s/docs/${v}.json`) || {}; }));
+      box.querySelector("ol").innerHTML = top.map(([q, a]) => {
+        const r = info[a.v][q]; if (!r) return "";
+        return `<li><a href="../${r[7] === "e" ? "e" : "v"}/${esc(a.v)}/d/${esc(r[6])}.html">${esc(volLabel(a.v))} Nr. ${esc(r[2])}</a> ${esc(r[3])}
+          <span class="meta">${esc(r[1] || r[0] || "")}</span><span class="relwhy">verwandt mit ${a.n} ${a.n === 1 ? "Stück" : "Stücken"} oben · ${a.s.toFixed(2)}</span></li>`;
+      }).join("");
+      box.hidden = false;
+    };
+    const drawList0 = drawList;
+    drawList = base => { drawList0(base); drawRel(base.filter(d => !click || click.test(d))); };
     const setClick = (f, scroll = true) => { click = f; drawList(docs.filter(facetOK)); if (scroll && f) $("#edocs-h").scrollIntoView({behavior: "smooth"}); };
     let tmo = null;
     const redraw = () => { clearTimeout(tmo); tmo = setTimeout(() => { click = null; draw(); }, 200); };
@@ -742,15 +845,19 @@ if (kinds) {
     const rows = data && data[box.dataset.piece];
     if (!rows || !rows.length) return;
     box.hidden = false;
-    box.innerHTML = `<h2>Verwandte Stücke</h2><div class="relw">${M.map(([k, l]) =>
+    const W0 = JSON.parse(box.dataset.w);
+    box.innerHTML = `<h2>Verwandte Stücke</h2><details class="relw"><summary>Gewichtung <span class="meta"></span></summary>
+      <div>${M.map(([k, l]) =>
       `<label>${l} <input type="range" min="0" max="1" step="0.05" value="${W[k] ?? 0}" data-k="${k}"></label>`).join("")}
-      </div><ol class="rel"></ol><p class="meta">Maschinell: Einbettungen von Regest bzw. Titel und Quellentext (qwen3-embedding-4b),
+      <button type="button" class="relreset">Voreinstellung</button></div></details><ol class="rel"></ol><p class="meta">Maschinell: Einbettungen von Regest bzw. Titel und Quellentext (qwen3-embedding-4b),
       gemeinsame Registereinträge, gemeinsame Wörter im Titel; je 0–1. Die Gewichte lassen sich verschieben (gilt für alle Stückseiten).
       <a href="${up}s/aehnlichkeit.html#${encodeURIComponent(box.dataset.piece)}">Auf der Karte zeigen</a></p>`;
     const ol = box.querySelector("ol.rel");
     const why = (k, w) => k === "terms" ? Object.entries(w).map(([t, n]) => `${n} ${TYP[t] || t}`).join(", ")
       : k === "titles" ? "«" + w.join(", ") + "»" : k === "text" && w ? `${w} ähnliche Abschnitte` : "";
+    const sum = box.querySelector(".relw summary .meta");
     function draw() {
+      sum.textContent = M.map(([k, l]) => `${l} ${(+W[k] || 0).toFixed(2)}`).join(" · ");
       const tot = M.reduce((a, [k]) => a + (+W[k] || 0), 0) || 1;
       const scored = rows.map(r => [M.reduce((a, [k], i) => a + (+W[k] || 0) * r[5][i], 0) / tot, r])
         .filter(x => x[0] > 0.05).sort((a, b) => b[0] - a[0]).slice(0, 10);
@@ -764,6 +871,12 @@ if (kinds) {
       try { localStorage.setItem("relw", JSON.stringify(W)); } catch (e) { /* not kept */ }
       draw();
     }));
+    box.querySelector(".relreset").addEventListener("click", () => {
+      W = Object.assign({}, W0);
+      box.querySelectorAll(".relw input").forEach(inp => { inp.value = W[inp.dataset.k] ?? 0; });
+      try { localStorage.removeItem("relw"); } catch (e) { /* not kept */ }
+      draw();
+    });
     draw();
   });
 })();

@@ -257,7 +257,9 @@ ul.offices li { padding: 8px 0; }
 .pages { font-family: var(--font-nav); margin: 12px 0; } .pages a { margin: 0 8px; }
 @media (max-width: 600px) { #facets .ff.wide { grid-column: auto; } }
 section.doclinks ul { list-style: none; padding: 0; margin: 0; } section.doclinks li { padding: 3px 0; border-top: 1px solid var(--border); }
-section.related .relw { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; font-size: .85rem; margin: .2rem 0 .6rem; }
+section.related details.relw { font-size: .85rem; margin: .2rem 0 .6rem; }
+section.related details.relw summary { cursor: pointer; }
+section.related details.relw > div { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.2rem; margin-top: .4rem; }
 section.related .relw input { width: 7rem; vertical-align: middle; }
 section.related ol.rel { padding-left: 1.4rem; margin: 0; }
 section.related ol.rel li { padding: 3px 0; border-top: 1px solid var(--border); }
@@ -277,3 +279,35 @@ article.meta-intro h2 { margin-top: 1.6rem; }
 article.meta-intro sup.fn a { text-decoration: none; padding: 0 1px; }
 article.meta-intro ol.footnotes { font-size: .85rem; padding-left: 1.6rem; }
 article.meta-intro ol.footnotes li { margin: .2rem 0; }
+/* «ähnliche» in the Stückverzeichnis (#40) */
+button.linkish { background: none; border: 0; padding: 0; color: var(--accent, #9b1c2e); cursor: pointer; font: inherit; font-size: .85rem; text-decoration: underline; }
+#dsim:empty { display: none; }
+#erel { margin-top: 1.5rem; }
+
+/* visual analyses (ssrq_print.metavis) */
+p.vislink{margin:.6rem 0 1rem;padding:.45rem .75rem;background:#f4f1ea;border-left:3px solid #b5452a;font-size:.95rem}
+.vis{margin:.5rem 0 2rem;max-width:100%;overflow-x:auto}
+svg.vissvg{width:100%;height:auto;display:block;font:11px/1.2 system-ui,sans-serif}
+svg.vissvg .lab{font-size:9px;fill:#333}
+svg.vissvg .lab.small{font-size:8px;fill:#555}
+svg.vissvg .lab.strong{font-size:11px;font-weight:600;fill:#222}
+svg.vissvg .axis text{font-size:9px}
+.vislegend{display:flex;flex-wrap:wrap;gap:.35rem .9rem;margin:.3rem 0 .6rem;font-size:.85rem}
+.vislegend button,.vislegend label{display:inline-flex;align-items:center;gap:.3rem;border:0;background:none;padding:0;font:inherit;cursor:pointer}
+.vislegend.static button{cursor:default}
+.vislegend button.off{opacity:.35;text-decoration:line-through}
+.vislegend span,.vistip .sw{display:inline-block;width:.8rem;height:.8rem;border-radius:2px}
+.vistip{position:absolute;z-index:1000;max-width:22rem;background:#fff;border:1px solid #ccc;box-shadow:0 2px 8px rgba(0,0,0,.15);
+  padding:.4rem .55rem;font-size:.8rem;line-height:1.35;pointer-events:none}
+.vistip .sw{width:.6rem;height:.6rem;margin-right:.25rem}
+
+/* places in the register (the former list k/orte.html and cards k/o/) */
+.pin{color:#175b5b;font-weight:700}
+.kfilter{margin:.4rem 0 .8rem;font-size:.95rem}
+ul.reg.konly > li.places:not([data-k]){display:none}
+ul.reg li.places ul.children{margin:.25rem 0 .2rem 1.2rem;font-size:.9rem}
+ul.reg li .partof{font-size:.85rem;color:#555}
+.placebox{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem;margin:.8rem 0}
+.placebox dl{margin:0}
+.placebox .minimap{height:220px;min-height:220px}
+@media (max-width:700px){.placebox{grid-template-columns:1fr}}

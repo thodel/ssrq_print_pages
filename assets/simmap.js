@@ -8,7 +8,10 @@ const UP = host.dataset.up || "../";
 const PAL = ["#c8102e", "#1f77b4", "#2ca02c", "#ff7f0e", "#9467bd", "#8c564b", "#e377c2", "#17becf", "#bcbd22",
   "#7f7f7f", "#393b79", "#637939", "#8c6d31", "#843c39", "#7b4173", "#3182bd", "#e6550d", "#31a354", "#756bb1",
   "#636363", "#9c9ede", "#cedb9c", "#e7cb94", "#e7969c", "#de9ed6", "#6baed6"];
-const S = { set: "regest", view: "2d", color: "canton", y0: null, y1: null, q: "", sel: null };
+const S = { set: "regest", view: "2d", color: "canton", y0: null, y1: null, q: "", sel: null, g: null };
+// #g=<n>: only one group of the map (from the Stückverzeichnis), coloured by group
+const gm = location.hash.match(/^#g=(\d+)$/);
+if (gm) { S.g = +gm[1]; S.color = "group"; }
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 let D = null, colorOf = null, legend = [], visible = null, rel = new Set(), idx = {};
 
@@ -48,11 +51,16 @@ function filter() {
   let n = 0;
   D.rows.forEach((r, i) => {
     const y = r[3];
-    const ok = (S.y0 == null || (y && y >= S.y0 && y <= S.y1)) &&
+    const ok = (S.g == null || S.set !== "regest" || D.group[i] === S.g) && (S.y0 == null || (y && y >= S.y0 && y <= S.y1)) &&
       (!q || `${r[5]} ${r[1]} ${r[4]} ${r[0]}`.toLowerCase().includes(q));
     visible[i] = ok ? 1 : 0; n += ok;
   });
-  host.querySelector(".smcount").textContent = `${n.toLocaleString("de-CH")} von ${D.rows.length.toLocaleString("de-CH")} Stücken`;
+  const cnt = host.querySelector(".smcount");
+  cnt.textContent = `${n.toLocaleString("de-CH")} von ${D.rows.length.toLocaleString("de-CH")} Stücken`;
+  if (S.g != null && S.set === "regest") {
+    cnt.insertAdjacentHTML("beforeend", ` · Gruppe ${S.g}: ${(D.groups[S.g] || "").replace(/[&<>]/g, "")} <a href="#" class="smallg">alle zeigen</a>`);
+    cnt.querySelector(".smallg").onclick = ev => { ev.preventDefault(); S.g = null; history.replaceState(null, "", location.pathname); filter(); fit(); draw(); };
+  }
 }
 const slug = s => s.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "x";  // as site.slug
 const href = i => { const r = D.rows[i]; return `${UP}${r[7]}/${r[1]}/d/${slug(r[7] === "e" ? r[0] : r[0].split("-").slice(1).join("-"))}.html`; };
@@ -104,9 +112,10 @@ function draw2d() {
 }
 function fit() {  // start on the core (0.5–99.5 % of the points): a few outlying islands would squeeze it
   const q = (a, f) => a[Math.floor((a.length - 1) * f)];
-  const xs = D.xy.map(p => 20 + p[0] * (W - 40)).sort((a, b) => a - b), ys = D.xy.map(p => 20 + (1 - p[1]) * (H - 40)).sort((a, b) => a - b);
+  const pts = visible && visible.some(Boolean) ? D.xy.filter((p, i) => visible[i]) : D.xy;
+  const xs = pts.map(p => 20 + p[0] * (W - 40)).sort((a, b) => a - b), ys = pts.map(p => 20 + (1 - p[1]) * (H - 40)).sort((a, b) => a - b);
   const x0 = q(xs, 0.005), x1 = q(xs, 0.995), y0 = q(ys, 0.005), y1 = q(ys, 0.995);
-  const k = Math.min(8, 0.92 * Math.min(W / (x1 - x0 || 1), H / (y1 - y0 || 1)));
+  const k = Math.min(pts === D.xy ? 8 : 40, 0.8 * Math.min(W / (x1 - x0 || 1), H / (y1 - y0 || 1)));
   T = d3.zoomIdentity.translate(W / 2 - k * (x0 + x1) / 2, H / 2 - k * (y0 + y1) / 2).scale(k);
   d3.select(cv).call(zoom.transform, T);
 }
@@ -177,6 +186,7 @@ async function load() {
   if (typeof window.dateSlider === "function")
     window.dateSlider(yh, d3.min(yrs), d3.max(yrs), st => { S.y0 = st.active ? st.lo : null; S.y1 = st.active ? st.hi : null; filter(); draw(); });
   info.innerHTML = "";
+  const cs = host.querySelector('[data-k="color"]'); if (cs) cs.value = S.color;
   recolor(); filter(); size(); fit(); draw();
   const want = decodeURIComponent(location.hash.slice(1));
   const k = D.rows.findIndex(r => r[0] === want);
