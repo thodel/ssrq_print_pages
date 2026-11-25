@@ -495,14 +495,14 @@ if (entryBox) {
       ${E.v.length ? `<p class="meta">Schreibweisen: ${esc(E.v.join(", "))}</p>` : ""}${E.d ? `<p>${esc(E.d)}</p>` : ""}
       ${E.V ? `<p class="xref">Verweis: siehe ${E.V.map(t => `<a href="../s/suche.html?q=${encodeURIComponent(t)}">${esc(t)}</a>`).join(", ")}</p>` : ""}
       ${E.Pt ? `<p class="meta">Im Register auch unter: ${E.Pt.map(esc).join(", ")}</p>` : ""}
-      ${E.S ? `<p class="xref">Siehe auch: ${E.S.map(([i, l]) => `<a href="#${esc(i)}">${esc(l)}</a>`).join(", ")}</p>` : ""}
+      ${E.S && E.S.length ? `<p class="xref">Siehe auch: ${E.S.map(([i, l]) => `<a href="#${esc(i)}">${esc(l)}</a>`).join(", ")}</p>` : ""}
       ${E.Fn ? `<p class="meta">Flurname${E.Fn[0].length ? " · Gde " + esc(E.Fn[0].join(", ")) : ""}${E.Fn[1] ? " · " + esc(E.Fn[1]) : ""}</p>` : ""}
       ${E.X ? `<p class="flags">${E.X.map(esc).join(" ")} <span class="meta">(maschinelle Prüfung)</span></p>` : ""}
       ${E.P ? `<details class="dupes"><summary>Möglicherweise dieselbe Person (${E.P.length})</summary><ul>${E.P.map(([i, l, v, why]) => `<li><a href="#${esc(i)}">${esc(l)}</a> — <i>${esc(v)}</i>: ${esc(why.join("; "))}</li>`).join("")}</ul><p class="meta">Vorschläge aus dem Vergleich von Namen, Belegjahren, Ämtern und Normdaten; nicht zusammengeführt.</p></details>` : ""}
       ${E.Ol && E.Ol.length ? `<p class="offices">Amtslisten: ${E.Ol.map(([amt, vol, n, id]) => `<a href="aemter.html#${esc(id)}">${esc(amt)}</a> <span class="meta">${esc(volLabel(vol))}, ${n} Personen</span>`).join(" · ")}</p>` : ""}
       ${E.O && E.O.length ? `<p class="offices">Ämter: ${E.O.map(([amt, ort, vol, id]) => `<a href="aemter.html#${esc(id)}">${esc(amt)}${ort ? " (" + esc(ort) + ")" : ""}</a> <span class="meta">${esc(volLabel(vol))}</span>`).join(" · ")}</p>` : ""}
       ${E.G ? `<p class="partof">${esc((REL[E.G[2]] || E.G[2]).replace(/^./, c => c.toUpperCase()))} von <a href="#${esc(E.G[0])}"><b>${esc(E.G[1])}</b></a>${E.G[3] ? " — " + esc(E.G[3]) : ""}</p>` : ""}
-      ${E.S && E.S.length ? `<details class="children" open><summary>${E.S.length} zugeordnete Einträge (Stücke zusammengefasst)</summary><ul>${E.S.map(([i, l, rel, q]) => `<li><span class="rel ${rel}">${esc(REL[rel] || rel)}</span> <a href="#${esc(i)}">${esc(l)}</a>${q && rel !== "same" ? " — " + esc(q) : ""}</li>`).join("")}</ul></details>` : ""}
+      ${E.Ch && E.Ch.length ? `<details class="children" open><summary>${E.Ch.length} zugeordnete Einträge (Stücke zusammengefasst)</summary><ul>${E.Ch.map(([i, l, rel, q]) => `<li><span class="rel ${rel}">${esc(REL[rel] || rel)}</span> <a href="#${esc(i)}">${esc(l)}</a>${q && rel !== "same" ? " — " + esc(q) : ""}</li>`).join("")}</ul></details>` : ""}
       ${E.K ? placeCard(E.K) : ""}
       <p class="auth">${auth.join(" ")}</p><p class="links">
       ${E.m ? `<a href="../k/karte.html">Karte der Orte</a>` : ""}${E.e ? `<a href="../e/x/${esc(cid)}.html">in den neuen Bänden (${E.e})</a>` : ""}
