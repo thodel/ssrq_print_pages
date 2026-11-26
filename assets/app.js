@@ -73,9 +73,9 @@ if (pager) fetch("pages.json").then(r => r.json()).then(data => {
     const p = P[k], prev = P[k - 1], next = P[k + 1];
     const starts = p.d.map(([id, no, t]) => `<li><a href="d/${slug(id.split("-").slice(1).join("-"))}.html">Nr. ${esc(no)}</a> ${esc(t)}</li>`).join("");
     pager.innerHTML = `<div class="bar">${prev ? `<a href="#${prev.i}">← vorige</a>` : ""}
-      <b>S. ${esc(p.n ?? "–")}</b> <span class="meta">(PDF-Seite ${p.i + 1} von ${P.length})</span>
+      <b>S. ${esc(p.n ?? "–")}</b> <span class="meta">${typeof p.o === "string" ? "" : `(PDF-Seite ${(p.o ?? p.i) + 1})`}</span>
       ${next ? `<a href="#${next.i}">nächste →</a>` : ""}
-      <a href="${esc(p.v)}" target="_blank">SSRQ Online ↗</a> <a href="${esc(data.pdf)}#page=${p.i + 1}" target="_blank">PDF ↗</a>
+      <a href="${esc(p.v)}" target="_blank">SSRQ Online ↗</a> ${typeof p.o === "string" ? `<a href="${esc(p.o)}" target="_blank">Seitenbild ↗</a> <span class="meta">(fehlt im PDF, aus SSRQ Online ergänzt)</span>` : `<a href="${esc(data.pdf)}#page=${(p.o ?? p.i) + 1}" target="_blank">PDF ↗</a>`}
       <input size="5" placeholder="Seite" id="goto"></div>
       ${p.s ? `<p class="todo">OCR-Status: ${esc(p.s)}</p>` : ""}
       ${starts ? `<ul class="starts">Auf dieser Seite beginnt: ${starts}</ul>` : ""}
