@@ -424,7 +424,7 @@ const definitionPanel = F => {
 // plus a faceted search over the pieces (canton, volume, date, keyword); every view follows the filters
 const entryBox = $("#entry");
 // persons (#8): what the registers say, structured — office, kinship, origin, rank, years, other names
-const KIND_DE = {role: "Amt, Beruf", kin: "Verwandtschaft", origin: "Herkunft, Bürgerrecht, Wohnort", rank: "Stand", attested: "Belegt", alias: "Andere Namen"};
+const KIND_DE = {role: "Amt, Beruf", kin: "Verwandtschaft", origin: "Herkunft, Bürgerrecht, Wohnort", rank: "Stand", attested: "Belegt", alias: "Andere Namen", name: "Vorname"};
 // places (#21): what the pieces say about the place (moved out of the description), and office holders named there
 const pieceHref = (vol, id) => `../v/${vol}/d/${slug(id.includes("-") ? id.slice(id.indexOf("-") + 1) : id)}.html`;
 function placeTopicsPanel(T, Of) {
@@ -529,7 +529,9 @@ if (entryBox) {
       <a href="${E.t}/${E.L}.html#${esc(cid)}">im Register ${TYPE[E.t]}, ${E.L}</a> <a href="../s/suche.html?q=${encodeURIComponent(E.l)}">in der Suche</a></p></div>`
       + (E.Q ? `<div class="panel xlinks"><h2>In anderen Quellen</h2><ul>${E.Q.map(([src, name, url, why]) =>
           `<li><b>${esc(XSRC[src] || src)}</b>: ${url ? `<a href="${esc(url)}" target="_blank">${esc(name)} ↗</a>` : esc(name)} <span class="meta">${esc(why)}</span></li>`).join("")}</ul>
-          <p class="meta">Dieselbe Person über gemeinsame Kennungen (SSRQ-Personenregister, Metagrid); nicht aus Namensähnlichkeit erschlossen.</p></div>` : "")
+          <p class="meta">${E.t === "place"
+            ? "Derselbe Ort über gemeinsame Kennungen (SSRQ, HLS, Wikidata) bei passendem Namen; bei Bullinger über gleichen Namen und Koordinaten (höchstens 3 km)."
+            : "Dieselbe Person über gemeinsame Kennungen (SSRQ-Personenregister, Metagrid); nicht aus Namensähnlichkeit erschlossen."}</p></div>` : "")
       + (E.R ? statementsPanel(E.R) : "")
       + (E.T || E.Of ? placeTopicsPanel(E.T || [], E.Of || []) : "")
       + (E.B ? `<div class="panel bio"><h2>Kurzbiografie</h2><p>${esc(E.B.t).replace(/\[([^\]]+)\]/g, '<span class="cite">[$1]</span>')}</p>

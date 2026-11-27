@@ -1,6 +1,8 @@
 // «Auswertung» (a/index.html, #17): facets at the top left, four linked views after Voyant —
-// 1 Begriffe (list, cloud, key words), 2 Zeitverlauf, 3 Kontexte (KWIC from the published piece pages), 4 Umfeld.
-// Data: a/meta.json, a/docs.json, a/ix/<k>.json, a/tf/<k>.json, a/top/<vol|_canton_coll>.json (ssrq_print/analysis.py).
+// 1 Begriffe (list with spelling forms, cloud, key words, comparison A/B), 2 Zeitverlauf, 3 Kontexte (KWIC from the
+// published piece pages), 4 Umfeld, 5 Schreibformen (shares of the printed forms of a word over time and by canton).
+// Data: a/meta.json, a/docs.json, a/ix/<k>.json, a/tf/<k>.json, a/sf/<k>.json, a/top/<vol|_canton_coll>.json
+// (ssrq_print/analysis.py).
 // Uses $, esc, getJSON, volLabel, dateSlider from app.js (loaded before this deferred script).
 (() => {
 const root = document.getElementById("an");
@@ -38,7 +40,13 @@ const STOP = new Set(STOP_WORDS.filter(Boolean).map(w => nrm(form(w))));
 
 // ---- state, kept in the URL hash
 const S = {coll: "", kt: [], vols: [], y0: null, y1: null, undated: true, parts: ["source"], spell: "norm", stop: true,
-           terms: [], m1: "list", dec: null};
+           terms: [], m1: "list", dec: null, cmp: null};
+// the comparison's side A: a frozen copy of the selection facets (B is always the current selection)
+const SNAP = ["coll", "kt", "vols", "y0", "y1", "undated"];
+const snap = () => Object.fromEntries(SNAP.map(k => [k, Array.isArray(S[k]) ? S[k].slice() : S[k]]));
+const snapStr = a => [a.coll, a.kt.join(";"), a.vols.join(";"), a.y0 == null ? "" : `${a.y0}-${a.y1}`, a.undated ? 1 : 0].join("|");
+const snapParse = t => { const [coll, kt, vols, y, u] = t.split("|"), [y0, y1] = y ? y.split("-").map(Number) : [null, null];
+  return {coll, kt: kt ? kt.split(";") : [], vols: vols ? vols.split(";") : [], y0, y1, undated: u === "1"}; };
 const parseHash = () => {
   const h = new URLSearchParams(location.hash.slice(1));
   if (h.has("coll")) S.coll = h.get("coll");
@@ -49,6 +57,7 @@ const parseHash = () => {
   if (h.has("stop")) S.stop = h.get("stop") === "1";
   if (h.has("m1")) S.m1 = h.get("m1");
   if (h.has("dec")) S.dec = +h.get("dec");
+  if (h.has("a")) S.cmp = snapParse(h.get("a"));
 };
 const writeHash = () => {
   const h = new URLSearchParams();
@@ -61,6 +70,7 @@ const writeHash = () => {
   if (!S.stop) h.set("stop", "0");
   if (S.m1 !== "list") h.set("m1", S.m1);
   if (S.dec != null) h.set("dec", S.dec);
+  if (S.cmp) h.set("a", snapStr(S.cmp));
   history.replaceState(null, "", "#" + h.toString());
 };
 
@@ -69,19 +79,19 @@ const fmt = n => n.toLocaleString("de-CH");
 const decYear = d => M.dec0 + 10 * d;
 
 // ---- selection helpers
-const selVols = () => M.vols.map((v, i) => i).filter(i => {
+const selVols = (st = S) => M.vols.map((v, i) => i).filter(i => {
   const [vol, , kt, coll] = M.vols[i];
-  return (!S.coll || coll === S.coll) && (!S.kt.length || S.kt.includes(kt)) && (!S.vols.length || S.vols.includes(vol));
+  return (!st.coll || coll === st.coll) && (!st.kt.length || st.kt.includes(kt)) && (!st.vols.length || st.vols.includes(vol));
 });
-const decOK = d => d < 0 || d >= M.ndec ? S.undated
-  : (S.y0 == null || (decYear(d) + 9 >= S.y0 && decYear(d) <= S.y1));
+const decOK = (d, st = S) => d < 0 || d >= M.ndec ? st.undated
+  : (st.y0 == null || (decYear(d) + 9 >= st.y0 && decYear(d) <= st.y1));
 const yearOK = y => !y ? S.undated : (S.y0 == null || (y >= S.y0 && y <= S.y1));
 const partIdx = () => S.parts.map(p => M.parts.indexOf(p)).filter(i => i >= 0);
-const tokensIn = (vs, ps, d = null) => {
+const tokensIn = (vs, ps, d = null, st = S) => {
   let n = 0;
   for (const v of vs) for (const p of ps) M.tokens[v][p].forEach((c, k) => {
     const dd = k === M.ndec ? -1 : k;
-    if ((d == null && decOK(dd)) || d === dd) n += c;
+    if ((d == null && decOK(dd, st)) || d === dd) n += c;
   });
   return n;
 };
@@ -151,9 +161,9 @@ function summary() {
 }
 
 // ---- view 1: Begriffe
-async function topCounts() {
+async function topCounts(st = S) {
   // the selected volumes' top lists; whole cantons through the summed files
-  const vs = selVols(), sel = new Set(vs), files = [], byGroup = {};
+  const vs = selVols(st), sel = new Set(vs), files = [], byGroup = {};
   M.vols.forEach(([vol, , kt, coll], i) => { (byGroup[`_${kt}_${coll}`] = byGroup[`_${kt}_${coll}`] || []).push(i); });
   const done = new Set();
   for (const [g, idx] of Object.entries(byGroup)) {
@@ -166,7 +176,7 @@ async function topCounts() {
     if (!obj) continue;
     for (const p of parts) for (const [w, decs] of obj[p] || []) {
       let c = 0;
-      for (const [d, n] of decs) if (decOK(d)) c += n;
+      for (const [d, n] of decs) if (decOK(d, st)) c += n;
       if (c) cnt.set(w, (cnt.get(w) || 0) + c);
     }
   }
@@ -189,6 +199,8 @@ const ll = (a, b, c, d) => { // log-likelihood: a, b observed in selection / res
 async function view1() {
   const body = $("#v1 .body");
   body.innerHTML = '<p class="meta">Lädt …</p>';
+  $("#v1").classList.toggle("wide", S.m1 === "cmp");
+  if (S.m1 === "cmp") return compare(body);
   const cnt = await topCounts(), total = tokensIn(selVols(), partIdx());
   let rows = [...cnt].filter(([w]) => !(S.stop && STOP.has(w)) && w.length > 1);
   if (S.m1 === "keys") {
@@ -206,10 +218,87 @@ async function view1() {
       style="font-size:${(0.8 + 1.9 * (Math.log(c) - mn) / Math.max(.01, mx - mn)).toFixed(2)}em">${esc(w)}</a>`).join(" ")}</div>`;
   } else {
     body.innerHTML = `<table class="an-tab"><thead><tr><th>Wort</th><th>Belege</th><th>pro 10'000</th>${S.m1 === "keys" ? "<th>LL</th>" : ""}</tr></thead><tbody>
-      ${rows.map(([w, c, g]) => `<tr><td><a href="#" data-w="${esc(w)}">${esc(w)}</a></td><td>${fmt(c)}</td><td>${per(c)}</td>${S.m1 === "keys" ? `<td>${g.toFixed(0)}</td>` : ""}</tr>`).join("")}
-      </tbody></table><p class="meta">Normalisierte Formen; ${S.m1 === "keys" ? "Wörter, die in der Auswahl häufiger sind als im ganzen Korpus (Log-Likelihood)" : "die häufigsten Wörter der Auswahl"}. Ein Klick zeigt Zeitverlauf, Kontexte und Umfeld.</p>`;
+      ${rows.map(([w, c, g]) => `<tr><td><button class="an-fx" data-fx="${esc(w)}" title="Schreibformen zeigen" aria-expanded="false">▸</button><a href="#" data-w="${esc(w)}">${esc(w)}</a></td><td>${fmt(c)}</td><td>${per(c)}</td>${S.m1 === "keys" ? `<td>${g.toFixed(0)}</td>` : ""}</tr>`).join("")}
+      </tbody></table><p class="meta">Normalisierte Formen; ${S.m1 === "keys" ? "Wörter, die in der Auswahl häufiger sind als im ganzen Korpus (Log-Likelihood)" : "die häufigsten Wörter der Auswahl"}. ▸ zeigt die gedruckten Schreibformen (im ganzen Korpus), ein Klick auf das Wort Zeitverlauf, Kontexte, Umfeld und Schreibformen.</p>`;
   }
 }
+// ▸ in the list: the printed forms behind a normalised word, with their shares (ix/: the 12 most frequent forms)
+document.addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-fx]");
+  if (!b || !root.contains(b)) return;
+  ev.preventDefault();
+  const tr = b.closest("tr"), open = tr.nextElementSibling && tr.nextElementSibling.classList.contains("an-forms");
+  if (open) { tr.nextElementSibling.remove(); b.textContent = "▸"; b.setAttribute("aria-expanded", "false"); return; }
+  b.textContent = "▾"; b.setAttribute("aria-expanded", "true");
+  const ix = await ixEntry(b.dataset.fx), f = ix ? Object.entries(ix.f) : [], n = f.reduce((s, [, c]) => s + c, 0) || 1;
+  tr.insertAdjacentHTML("afterend", `<tr class="an-forms"><td colspan="${tr.children.length}">${f.length ? f.map(([x, c]) =>
+    `<a href="#" data-pf="${esc(x)}" title="${fmt(c)} Belege; Kontexte in dieser Schreibung">${esc(x)}</a> ${Math.round(100 * c / n) || "<1"} %`).join(" · ")
+    : '<span class="meta">keine Angaben</span>'}</td></tr>`);
+});
+
+// ---- view 1, mode «Vergleich»: the frozen selection A against the current selection B
+async function compare(body) {
+  if (!S.cmp) {
+    body.innerHTML = `<p>Vergleicht zwei Auswahlen, z. B. Bern gegen Zürich oder vor 1500 gegen nach 1500.</p>
+      <ol class="an-steps"><li>Facetten für die erste Auswahl setzen und <button id="v1-a">als A festhalten</button>.</li>
+      <li>Facetten für die zweite Auswahl (B) ändern.</li></ol>`;
+    return;
+  }
+  const A = S.cmp, va = selVols(A), vb = selVols(), ps = partIdx();
+  const [ca, cb] = await Promise.all([topCounts(A), topCounts()]);
+  const ta = tokensIn(va, ps, null, A), tb = tokensIn(vb, ps);
+  if (!ta || !tb) { body.innerHTML = `<p class="meta">${!ta ? "A" : "B"} enthält keine Wörter. <a href="#" id="v1-a0">A verwerfen</a></p>`; return; }
+  const words = new Set([...ca.keys(), ...cb.keys()]), rows = [];
+  for (const w of words) {
+    if (w.length < 2 || (S.stop && STOP.has(w))) continue;
+    const a = ca.get(w) || 0, b = cb.get(w) || 0;
+    if (a + b < 10) continue;
+    rows.push({w, a, b, r: Math.log2(((a + .5) / ta) / ((b + .5) / tb)), f: (a + b) / (ta + tb) * 10000, g: ll(a, b, ta, tb)});
+  }
+  const sig = rows.filter(r => r.g >= 15.13), sideA = sig.filter(r => r.r > 0).sort((x, y) => y.g - x.g),
+        sideB = sig.filter(r => r.r < 0).sort((x, y) => y.g - x.g);
+  const label = st => { const v = selVols(st);
+    const kt = st.kt.length ? st.kt.map(k => CANTON[k] || k).join(", ") : st.vols.length ? `${st.vols.length} Bände` : "alle Bände";
+    return `${kt}${st.coll ? ` (${st.coll === "tei" ? "TEI" : "Druck"})` : ""}${st.y0 != null ? `, ${st.y0}–${st.y1}` : ""} · ${fmt(tokensIn(v, ps, null, st))} Wörter`; };
+  body.innerHTML = `<p class="an-ab"><b class="a">A</b> ${esc(label(A))} <a href="#" id="v1-a0">verwerfen</a> · <a href="#" id="v1-a">aktuelle Auswahl als A</a><br>
+    <b class="b">B</b> ${esc(label(S))} <span class="meta">(die Facetten links)</span></p><div id="v1-scatter"></div>
+    <div class="an-cols two"><div><h3>typisch für A</h3>${cmpTab(sideA)}</div><div><h3>typisch für B</h3>${cmpTab(sideB)}</div></div>
+    <p class="meta">Waagrecht: wie viel häufiger ein Wort in A (rechts) oder B (links) ist, als Zweierlogarithmus des Verhältnisses
+    der relativen Häufigkeiten (am Rand: ×64 und mehr, oft Wörter, die nur in einer Auswahl unter den häufigsten sind); senkrecht: Häufigkeit pro 10'000 Wörter in A und B zusammen. Hervorgehoben und in den Listen:
+    Unterschiede mit Log-Likelihood ≥ 15,13 (p < 0,0001). Grundlage sind die häufigsten Wörter je Band.</p>`;
+  scatter($("#v1-scatter"), rows, sideA.slice(0, 6).concat(sideB.slice(0, 6)));
+}
+const cmpTab = rs => rs.length ? `<table class="an-tab"><thead><tr><th>Wort</th><th>A</th><th>B</th><th>LL</th></tr></thead><tbody>${rs.slice(0, 40).map(r =>
+  `<tr><td><a href="#" data-w="${esc(r.w)}">${esc(r.w)}</a></td><td>${fmt(r.a)}</td><td>${fmt(r.b)}</td><td>${r.g.toFixed(0)}</td></tr>`).join("")}</tbody></table>`
+  : '<p class="meta">Keine deutlichen Unterschiede.</p>';
+function scatter(host, rows, labelled) {
+  if (!host || !window.d3 || !rows.length) return;
+  const W = host.clientWidth || 520, H = 340, m = {l: 36, r: 10, t: 14, b: 26};
+  // words missing from one side's frequency lists would run off to ×1000: shown at the edge (|log2| ≤ 6, ×64)
+  const CAP = 6, rc = r => Math.max(-CAP, Math.min(CAP, r.r)), ext = Math.min(CAP, Math.max(1, d3.max(rows, r => Math.abs(r.r))));
+  const x = d3.scaleLinear().domain([-ext, ext]).range([m.l, W - m.r]);
+  const y = d3.scaleLog().domain([d3.min(rows, r => r.f), d3.max(rows, r => r.f)]).nice().range([H - m.b, m.t]);
+  const svg = d3.select(host).append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("class", "an-chart an-scatter");
+  svg.append("g").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(7).tickFormat(d => d === 0 ? "0" : `${d > 0 ? "A" : "B"} ×${2 ** Math.abs(d) < 10 ? +(2 ** Math.abs(d)).toFixed(1) : Math.round(2 ** Math.abs(d))}`));
+  svg.append("g").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4, "~g"));
+  svg.append("line").attr("x1", x(0)).attr("x2", x(0)).attr("y1", m.t).attr("y2", H - m.b).attr("class", "zero");
+  const lab = new Set(labelled.map(r => r.w));
+  svg.append("g").selectAll("circle").data(rows).join("circle").attr("cx", r => x(rc(r))).attr("cy", r => y(r.f))
+    .attr("r", r => lab.has(r.w) ? 4 : 2.5).attr("class", r => r.g >= 15.13 ? (r.r > 0 ? "a" : "b") : "n")
+    .style("cursor", "pointer").on("click", (ev, r) => setTerms([r.w]))
+    .append("title").text(r => `${r.w}: A ${fmt(r.a)}, B ${fmt(r.b)} (LL ${r.g.toFixed(0)})`);
+  svg.append("g").selectAll("text").data(labelled).join("text").attr("x", r => x(rc(r)) + (r.r > 0 ? -5 : 5)).attr("y", r => y(r.f) - 5)
+    .attr("text-anchor", r => r.r > 0 ? "end" : "start").text(r => r.w);
+}
+document.addEventListener("click", ev => {
+  const t = ev.target;
+  if (t.id === "v1-a") { ev.preventDefault(); S.cmp = snap(); writeHash(); view1(); }
+  else if (t.id === "v1-a0") { ev.preventDefault(); S.cmp = null; writeHash(); view1(); }
+  else if (t.closest && t.closest("[data-pf]") && root.contains(t)) {  // a printed form: its contexts in this spelling
+    ev.preventDefault(); S.spell = "print"; const r = root.querySelector('input[name=spell][value=print]'); if (r) r.checked = true;
+    setTerms([t.closest("[data-pf]").dataset.pf]);
+  }
+});
 
 // ---- word lookups
 async function ixEntry(w) { const sh = await getJSON(`${A}ix/${key(w)}.json`); return sh ? sh[w] : null; }
@@ -438,12 +527,58 @@ function network(words, ents) {
   });
 }
 
+// ---- view 5: Schreibformen — shares of a word's printed forms per decade (stacked area) and per canton (bars)
+async function view5() {
+  const body = $("#v5 .body");
+  if (!body) return;
+  if (!S.terms.length) { body.innerHTML = '<p class="meta">Zeigt für ein Wort, wie es geschrieben wird: im Zeitverlauf und nach Kanton.</p>'; return; }
+  const w = (await expand(S.terms[0]))[0] || nrm(form(S.terms[0]));
+  const sf = ((await getJSON(`${A}sf/${key(w)}.json`)) || {})[w];
+  if (!sf) { body.innerHTML = `<p class="meta">Für «${esc(w)}» gibt es keine Übersicht der Schreibformen: Sie steht für Wörter mit mindestens ${fmt(M.min_sf || 200)} Belegen und mehreren gedruckten Formen.</p>`; return; }
+  const vs = new Set(selVols()), ps = new Set(partIdx()), forms = Object.keys(sf);
+  const byDec = Array.from({length: M.ndec}, () => Object.fromEntries(forms.map(f => [f, 0])));
+  const byKt = {};
+  for (const f of forms) for (const [v, p, d, c] of sf[f]) {
+    if (!vs.has(v) || !ps.has(p) || !decOK(d)) continue;
+    if (d >= 0 && d < M.ndec) byDec[d][f] += c;
+    const kt = M.vols[v][2]; (byKt[kt] = byKt[kt] || Object.fromEntries(forms.map(g => [g, 0])))[f] += c;
+  }
+  const sum = o => forms.reduce((n, f) => n + o[f], 0);
+  const decs = byDec.map((o, d) => ({d, y: decYear(d), n: sum(o), ...o})).filter(o => o.n >= 10);
+  const kts = Object.entries(byKt).map(([k, o]) => ({k, n: sum(o), ...o})).filter(o => o.n >= 10).sort((a, b) => b.n - a.n);
+  if (!decs.length && !kts.length) { body.innerHTML = `<p class="meta">«${esc(w)}» kommt in dieser Auswahl zu selten vor.</p>`; return; }
+  const col = d3.scaleOrdinal(forms, ["#175b5b", "#b5462f", "#3b6fb6", "#8a6d1d", "#6b4c9a", "#2f7d3a", "#9a4c6b", "#5c5c5c"]);
+  body.innerHTML = `<p class="legend">«${esc(w)}»: ${forms.map(f => `<a href="#" data-pf="${esc(f)}" title="Kontexte in dieser Schreibung"><span style="color:${col(f)}">■</span> ${esc(f)}</a>`).join(" ")}</p>
+    <div class="an-cols two"><div><h3>Im Zeitverlauf <span class="meta">(Anteile je Jahrzehnt)</span></h3><div id="v5-time"></div></div>
+    <div><h3>Nach Kanton <span class="meta">(Anteile)</span></h3><div id="v5-kt"></div></div></div>
+    <p class="meta">Gedruckte Formen mit mindestens 1 % der Belege; Jahrzehnte und Kantone mit mindestens 10 Belegen. Seltene
+    Formen sind oft Lesefehler der OCR. Ein Klick auf eine Form zeigt ihre Kontexte.</p>`;
+  const share = o => Object.fromEntries(forms.map(f => [f, o[f] / o.n]));
+  if (decs.length > 1) {
+    const host = $("#v5-time"), W = host.clientWidth || 420, H = 220, m = {l: 34, r: 8, t: 8, b: 24};
+    const x = d3.scaleLinear().domain(d3.extent(decs, o => o.y)).range([m.l, W - m.r]), y = d3.scaleLinear().range([H - m.b, m.t]);
+    const st = d3.stack().keys(forms)(decs.map(o => ({y: o.y, n: o.n, ...share(o)})));
+    const svg = d3.select(host).append("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("class", "an-chart");
+    svg.append("g").selectAll("path").data(st).join("path").attr("fill", s => col(s.key)).attr("opacity", .9)
+      .attr("d", d3.area().x(p => x(p.data.y)).y0(p => y(p[0])).y1(p => y(p[1])).curve(d3.curveMonotoneX))
+      .append("title").text(s => s.key);
+    svg.append("g").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(6).tickFormat(d3.format("d")));
+    svg.append("g").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4, "%"));
+    svg.append("g").selectAll("rect").data(decs).join("rect").attr("x", o => x(o.y) - 3).attr("width", 6).attr("y", m.t)
+      .attr("height", H - m.t - m.b).attr("fill", "transparent").append("title")
+      .text(o => `${o.y}er (${fmt(o.n)} Belege): ` + forms.filter(f => o[f]).map(f => `${f} ${Math.round(100 * o[f] / o.n)} %`).join(", "));
+  } else $("#v5-time").innerHTML = '<p class="meta">Zu wenige datierte Belege.</p>';
+  $("#v5-kt").innerHTML = kts.slice(0, 16).map(o => `<div class="an-bar" title="${fmt(o.n)} Belege: ${forms.filter(f => o[f]).map(f => `${esc(f)} ${Math.round(100 * o[f] / o.n)} %`).join(", ")}">
+    <span class="k">${esc(CANTON[o.k] || o.k)}</span><span class="an-seg">${forms.filter(f => o[f]).map(f =>
+      `<i style="width:${(100 * o[f] / o.n).toFixed(1)}%;background:${col(f)}"></i>`).join("")}</span><span class="meta">${fmt(o.n)}</span></div>`).join("");
+}
+
 // ---- wiring
-function setTerms(ts) { S.terms = ts; S.dec = null; $("#an-term").value = ts.join(", "); writeHash(); view2(); view3(); }
+function setTerms(ts) { S.terms = ts; S.dec = null; $("#an-term").value = ts.join(", "); writeHash(); view2(); view3(); view5(); }
 let busy = null;
 function changed() {
   writeHash(); ALL = null; summary();
-  clearTimeout(busy); busy = setTimeout(() => { view1(); view2(); view3(); }, 250);
+  clearTimeout(busy); busy = setTimeout(() => { view1(); view2(); view3(); view5(); }, 250);
 }
 document.addEventListener("click", ev => {
   const a = ev.target.closest("[data-w]");
@@ -459,7 +594,7 @@ $("#an-q").addEventListener("submit", ev => {
   [M, D] = await Promise.all([getJSON(A + "meta.json"), getJSON(A + "docs.json")]);
   if (!M || !D) { root.innerHTML = '<p class="todo">Die Daten der Auswertung sind noch nicht erzeugt.</p>'; return; }
   CANTON = (await getJSON(`${UPP}s/search/meta.json`) || {}).cantons || {};
-  $("#v1-modes").innerHTML = [["list", "Liste"], ["cloud", "Wolke"], ["keys", "Kennwörter"]].map(([k, t]) =>
+  $("#v1-modes").innerHTML = [["list", "Liste"], ["cloud", "Wolke"], ["keys", "Kennwörter"], ["cmp", "Vergleich"]].map(([k, t]) =>
     `<a href="#" data-m1="${k}" class="${S.m1 === k ? "on" : ""}">${t}</a>`).join(" ");
   $("#v1-modes").addEventListener("click", ev => {
     const m = ev.target.closest("[data-m1]"); if (!m) return;
@@ -468,6 +603,6 @@ $("#an-q").addEventListener("submit", ev => {
   });
   $("#an-term").value = S.terms.join(", ");
   await facets();
-  summary(); view1(); view2(); view3();
+  summary(); view1(); view2(); view3(); view5();
 })();
 })();

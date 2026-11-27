@@ -212,7 +212,7 @@ ul.offices li { padding: 8px 0; }
 .an-view h2 { margin: 0 0 6px; font-size: 1.2rem; }
 .an-view header a { font-family: var(--font-nav); font-size: .85rem; margin-left: 6px; }
 .an-view header a.on { font-weight: 700; text-decoration: none; color: inherit; }
-#v1 .body { max-height: 420px; overflow: auto; }
+#v1 .body { max-height: 420px; overflow: auto; } #v1.wide .body { max-height: none; }
 .an-tab { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
 .an-tab th { text-align: left; font: 600 .8rem var(--font-nav); color: var(--muted); border-bottom: 1px solid var(--border); }
 .an-tab td { padding: 2px 4px; border-top: 1px solid var(--border); } .an-tab td + td, .an-tab th + th { text-align: right; }
@@ -236,6 +236,18 @@ ul.offices li { padding: 8px 0; }
   .an-kwic td.l, .an-kwic td.r { width: auto; }
 }
 .an-net { overflow: visible; } #v4-net { padding-right: 60px; }
+.an-fx { border: 0; background: none; padding: 0 4px 0 0; cursor: pointer; color: var(--muted); font-size: .8rem; }
+.an-tab tr.an-forms td { text-align: left; font-size: 13px; color: var(--muted); border-top: 0; padding: 0 4px 4px 18px; }
+.an-cols.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.an-ab { font-size: 14px; margin: 0 0 6px; } .an-ab b { display: inline-block; width: 1.4em; text-align: center; color: #fff; border-radius: 3px; }
+.an-ab b.a, .an-scatter circle.a { background: #b5462f; fill: #b5462f; } .an-ab b.b, .an-scatter circle.b { background: #3b6fb6; fill: #3b6fb6; }
+.an-scatter circle.n { fill: var(--border); } .an-scatter .zero { stroke: var(--muted); stroke-dasharray: 2 3; }
+.an-scatter text { font-size: 11px; } .an-steps { margin: 4px 0; padding-left: 1.4em; }
+.an-bar { display: grid; grid-template-columns: 8em 1fr 4em; gap: 6px; align-items: center; font-size: 13px; margin: 2px 0; }
+.an-bar .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .an-bar .meta { text-align: right; }
+.an-bar .an-seg { display: flex; height: 12px; background: var(--border); } .an-bar .an-seg i { display: block; height: 100%; }
+#v5 .legend a { text-decoration: none; margin-right: 8px; white-space: nowrap; }
+@media (max-width: 900px) { .an-cols.two { grid-template-columns: 1fr; } }
 .panel.statements dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
 .panel.statements dt { font: 600 .85rem var(--font-nav); color: var(--muted); padding-top: 2px; }
 .panel.statements dd { margin: 0; } .panel.statements ul { list-style: none; margin: 0; padding: 0; }
