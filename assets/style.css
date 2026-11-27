@@ -311,3 +311,7 @@ ul.reg li .partof{font-size:.85rem;color:#555}
 .placebox dl{margin:0}
 .placebox .minimap{height:220px;min-height:220px}
 @media (max-width:700px){.placebox{grid-template-columns:1fr}}
+
+/* #52: references in register descriptions */
+.desc .dref { border-bottom: 1px dotted currentColor; cursor: help; }
+.desc .more-refs { background: none; border: 0; padding: 0 0 0 .3em; color: var(--link); cursor: pointer; font: inherit; text-decoration: underline; }

@@ -480,6 +480,25 @@ if (entryBox) {
   const shard = cid => { const m = cid.match(/^([a-z]+?)(\d+)$/); return m ? `data/${FILE[m[1]]}-${Math.floor(+m[2] / 1000)}.json` : null; };
   const entryOf = async cid => { const f = shard(cid); const d = f && await getJSON(f); return d ? d[cid] : null; };
   const bin = y => Math.floor(y / 20) * 20;
+  // the register's superscripts as <sup>, «n^{o}» as «Nr.» (#52)
+  const sup = t => esc(t).replace(/n\^\{o\}/g, "Nr.").replace(/\^\{([^}]*)\}/g, "<sup>$1</sup>");
+  const MAXREF = 8;  // longer lists of references end in «… und N weitere Stellen»
+  const descHTML = E => {
+    if (!E.dd) return E.d ? `<p>${sup(E.d)}</p>` : "";
+    const one = segs => {
+      let n = 0, head = "", rest = "";
+      const nref = segs.filter(x => Array.isArray(x)).length;
+      for (const x of segs) {
+        const h = !Array.isArray(x) ? sup(x)
+          : x[1] ? `<a href="${esc(x[1])}" title="${esc(x[2])}">${esc(x[0])}</a>`
+          : `<span class="dref" title="${esc(x[2])}">${esc(x[0])}</span>`;
+        if (n >= MAXREF && nref > MAXREF + 2) rest += h; else head += h;
+        if (Array.isArray(x)) n++;
+      }
+      return rest ? `${head}<button type="button" class="more-refs">… und ${nref - MAXREF} weitere Stellen</button><span hidden>${rest}</span>` : head;
+    };
+    return `<p class="desc">${E.dd.map(one).join("; ")}</p>`;
+  };
   const render = async () => {
     const cid = decodeURIComponent(location.hash.slice(1));
     const [E, meta] = await Promise.all([entryOf(cid), getJSON("../s/search/meta.json")]);
@@ -492,7 +511,7 @@ if (entryBox) {
     document.title = `${E.l} · SSRQ Druckbände`;
     const auth = E.a.map(([src, id, name, url]) => url ? `<a href="${esc(url)}" target="_blank">${src.toUpperCase()} ${esc(id)} ${esc(name)} ↗</a>` : `${src.toUpperCase()} ${esc(id)} ${esc(name)}`);
     entryBox.innerHTML = `<div class="panel doc-head entry-head"><p class="kicker">${TYPE[E.t]}</p><h1>${esc(E.l)}</h1>
-      ${E.v.length ? `<p class="meta">Schreibweisen: ${esc(E.v.join(", "))}</p>` : ""}${E.d ? `<p>${esc(E.d)}</p>` : ""}
+      ${E.v.length ? `<p class="meta">Schreibweisen: ${esc(E.v.join(", "))}</p>` : ""}${descHTML(E)}
       ${E.V ? `<p class="xref">Verweis: siehe ${E.V.map(t => `<a href="../s/suche.html?q=${encodeURIComponent(t)}">${esc(t)}</a>`).join(", ")}</p>` : ""}
       ${E.Pt ? `<p class="meta">Im Register auch unter: ${E.Pt.map(esc).join(", ")}</p>` : ""}
       ${E.S && E.S.length ? `<p class="xref">Siehe auch: ${E.S.map(([i, l]) => `<a href="#${esc(i)}">${esc(l)}</a>`).join(", ")}</p>` : ""}
@@ -518,6 +537,7 @@ if (entryBox) {
           <p class="meta">Maschinell erstellt (${esc(E.B.m)}) aus den Angaben der Register und den Stücken, in denen die Person vorkommt; jeder Satz nennt seinen Beleg.</p></div>` : "")
       + (E.F ? definitionPanel(E.F) : "");
     drawMinimaps(entryBox);
+    entryBox.querySelectorAll(".more-refs").forEach(b => b.addEventListener("click", () => { b.nextElementSibling.hidden = false; b.remove(); }));
     // the pieces citing it, with the entries they cite
     const docs = [];
     for (const [vol, ids] of Object.entries(E.D)) {
